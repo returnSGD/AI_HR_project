@@ -18,7 +18,7 @@ services:
       - key: LLM_MODEL
         value: deepseek-chat
 
-  - type: static_site
+  - type: static
     name: offer-catcher-frontend
     env: static
     rootDir: frontend
