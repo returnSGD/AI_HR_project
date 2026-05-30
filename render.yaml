@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: offer-catcher-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    region: singapore          # 亚太区，中国访问延迟相对最低
+
+    envVars:
+      # sync: false = 值不写入代码仓库，必须在 Render 控制台手动填写
+      - key: LLM_API_KEY
+        sync: false
+      # 以下两项非敏感，直接写入配置
+      - key: LLM_BASE_URL
+        value: https://api.deepseek.com/v1
+      - key: LLM_MODEL
+        value: deepseek-chat
