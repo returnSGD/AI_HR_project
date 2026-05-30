@@ -17,11 +17,3 @@ services:
         value: https://api.deepseek.com/v1
       - key: LLM_MODEL
         value: deepseek-chat
-
-  - type: web
-    name: offer-catcher-frontend
-    env: static
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    publishPath: dist
-    plan: free
