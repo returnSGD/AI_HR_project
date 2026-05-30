@@ -66,7 +66,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MyProfile from './components/MyProfile.vue'
 
-const API = 'http://localhost:8000/api/match'
+const API = 'https://offer-catcher-api.onrender.com/api/match'
 const { t, locale } = useI18n()
 
 const phase = ref('idle')        // idle | loading | streaming | done
