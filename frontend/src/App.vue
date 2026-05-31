@@ -17,7 +17,7 @@
       <p class="sub">{{ t('hero.sub') }}</p>
 
       <label class="upload">
-        <input type="file" accept=".pdf" @change="pick" hidden>
+        <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls,.md,.txt,.jpg,.jpeg,.png" @change="pick" hidden>
         <span v-if="!file">📋 {{ t('upload.drag') }}</span>
         <span v-else>📄 {{ file.name }}</span>
       </label>
@@ -96,10 +96,26 @@ function renderMarkdown(md) {
   return html
 }
 
+const ALLOWED_EXTS = new Set(['pdf','docx','doc','xlsx','xls','md','txt','jpg','jpeg','png'])
+const ALLOWED_MIME = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'text/plain', 'text/markdown',
+  'image/jpeg', 'image/png',
+])
+
 function pick(e) {
   const f = e.target.files?.[0]
-  if (f?.type === 'application/pdf') { file.value = f; err.value = '' }
-  else if (f) err.value = t('error.pdf')
+  if (!f) return
+  const ext = f.name.split('.').pop().toLowerCase()
+  if (ALLOWED_MIME.has(f.type) || ALLOWED_EXTS.has(ext)) {
+    file.value = f; err.value = ''
+  } else {
+    err.value = t('error.fileType')
+  }
 }
 
 async function run() {

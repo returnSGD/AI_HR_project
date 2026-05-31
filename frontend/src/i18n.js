@@ -8,12 +8,12 @@ const messages = {
       l1: '让 AI 帮你找到', accent: '梦想工作', l2: '',
       sub: '上传简历 · 智能匹配顶级职位 · 获取由 Claude AI 驱动的个性化优化报告'
     },
-    upload: { drag: '将您的简历拖放至此', pick: '选择 PDF 文件' },
+    upload: { drag: '拖拽或点击上传简历文件', pick: '支持 PDF / Word / Excel / 图片 / TXT / MD' },
     btn: { run: '✨ 分析我的简历', new: '↺ 新的分析', again: '↺ 分析其他简历' },
     status: { read: '正在读取您的简历…', match: '正在与职位数据库匹配…' },
     job: { match: '匹配度' },
     section: { jobs: '📊 找到前 {n} 个匹配职位', report: '🤖 AI 诊断报告', generating: '生成中…', complete: '完成 ✓' },
-    error: { pdf: '请选择 PDF 文件。', api: '发生意外错误，请稍后重试。' },
+    error: { pdf: '请选择 PDF 文件。', fileType: '不支持的文件格式，请上传 PDF、Word、Excel、图片、TXT 或 MD 文件。', api: '发生意外错误，请稍后重试。' },
     footer: 'Offer-Catcher · AI 驱动的职位匹配 · 演示应用 · 基于 Claude 构建',
     profile: {
       title: '个人主页', guest: '访客用户', guestSub: '求职者',
@@ -29,12 +29,12 @@ const messages = {
       l1: 'Land Your', accent: 'Dream Job', l2: 'With AI-Powered Matching',
       sub: 'Upload your resume · get matched to top-tier roles · receive a personalized optimization report powered by Claude AI.'
     },
-    upload: { drag: 'Drop your resume here', pick: 'Choose a PDF file' },
+    upload: { drag: 'Drop or click to upload your resume', pick: 'PDF / Word / Excel / Image / TXT / MD supported' },
     btn: { run: '✨ Analyze My Resume', new: '↺ New Analysis', again: '↺ Analyze Another Resume' },
     status: { read: 'Reading your resume…', match: 'Matching against job database…' },
     job: { match: 'Match' },
     section: { jobs: '📊 Top {n} Matches Found', report: '🤖 AI Diagnostic Report', generating: 'Generating…', complete: 'Complete ✓' },
-    error: { pdf: 'Please select a PDF file.', api: 'An unexpected error occurred. Please try again.' },
+    error: { pdf: 'Please select a PDF file.', fileType: 'Unsupported format. Please upload PDF, Word, Excel, image, TXT, or MD.', api: 'An unexpected error occurred. Please try again.' },
     footer: 'Offer-Catcher · AI-powered job matching · Demo · Built with Claude',
     profile: {
       title: 'My Profile', guest: 'Guest User', guestSub: 'Job Seeker',
