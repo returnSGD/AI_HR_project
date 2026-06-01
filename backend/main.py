@@ -420,7 +420,9 @@ _STUDENT_TEXT_SIGNALS = re.compile(
     re.I,
 )
 
-def get_top_jobs(text: str, n: int = 3, meta: Optional[dict] = None) -> list[dict]:
+_MAX_PER_COMPANY = 2   # diversity cap: no single company dominates the results
+
+def get_top_jobs(text: str, n: int = 10, meta: Optional[dict] = None) -> list[dict]:
     tokens = tokenize(text)
 
     # Text-based student fallback: if graduation_year missing but resume signals student
@@ -429,8 +431,32 @@ def get_top_jobs(text: str, n: int = 3, meta: Optional[dict] = None) -> list[dic
         effective_meta = {**effective_meta, "graduation_year": datetime.now().year}
 
     jobs = _load_all_jobs()
-    scored = [{**j, "score": score_job(tokens, j, effective_meta or None)} for j in jobs]
-    return sorted(scored, key=lambda x: x["score"], reverse=True)[:n]
+    scored = sorted(
+        [{**j, "score": score_job(tokens, j, effective_meta or None)} for j in jobs],
+        key=lambda x: x["score"],
+        reverse=True,
+    )
+
+    # Diversity re-ranking: pick top-n while capping each company at _MAX_PER_COMPANY
+    results: list[dict] = []
+    company_count: dict[str, int] = {}
+    overflow: list[dict] = []   # jobs bumped by the cap, filled in at the end if needed
+
+    for job in scored:
+        co = job.get("company", "")
+        if company_count.get(co, 0) < _MAX_PER_COMPANY:
+            results.append(job)
+            company_count[co] = company_count.get(co, 0) + 1
+            if len(results) == n:
+                break
+        else:
+            overflow.append(job)
+
+    # If we don't have enough diverse jobs, append the overflow to fill up to n
+    if len(results) < n:
+        results.extend(overflow[: n - len(results)])
+
+    return results
 
 
 # ── Resume metadata extraction ────────────────────────────────────────
