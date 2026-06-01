@@ -44,13 +44,18 @@
                 <div class="ti">{{ j.title }}</div>
               </div>
               <div class="job-right">
-                <!-- Source tag -->
-                <component
-                  :is="j.source_type === 'crawled' && j.url ? 'a' : 'span'"
-                  :href="j.source_type === 'crawled' && j.url ? j.url : undefined"
-                  :target="j.source_type === 'crawled' && j.url ? '_blank' : undefined"
+                <!-- Source tag: crawled with valid URL → clickable <a>; otherwise plain <span> -->
+                <a
+                  v-if="j.source_type === 'crawled' && j.url"
+                  :href="j.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="src-tag src-crawled src-link"
+                >{{ t('source.crawled') }}</a>
+                <span
+                  v-else
                   :class="['src-tag', `src-${j.source_type || 'preset'}`]"
-                >{{ t(`source.${j.source_type || 'preset'}`) }}</component>
+                >{{ t(`source.${j.source_type || 'preset'}`) }}</span>
                 <div class="score">{{ j.score }}%<span>{{ t('job.match') }}</span></div>
               </div>
             </div>
@@ -378,8 +383,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .src-tag { font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-decoration: none; white-space: nowrap; }
 .src-preset { background: #F1F5F9; color: #64748B; }
 .src-crawled { background: #EFF6FF; color: var(--blue); }
-.src-crawled:hover { text-decoration: underline; }
 .src-user_posted { background: #ECFDF5; color: var(--green); }
+.src-link { cursor: pointer; transition: opacity .15s; }
+.src-link:hover { opacity: .72; }
 
 /* Report box */
 .rbox { background: #fff; border: 1px solid var(--g2); border-radius: 14px; padding: 24px; line-height: 1.8; }
