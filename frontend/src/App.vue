@@ -51,7 +51,11 @@
                   target="_blank"
                   rel="noopener noreferrer"
                   class="src-tag src-crawled src-link"
-                >{{ t('source.crawled') }}</a>
+                >🌐 {{ j.platform || t('source.crawled').replace('🌐 ', '') }}</a>
+                <span
+                  v-else-if="j.source_type === 'crawled'"
+                  class="src-tag src-crawled"
+                >🌐 {{ j.platform || t('source.crawled').replace('🌐 ', '') }}</span>
                 <span
                   v-else
                   :class="['src-tag', `src-${j.source_type || 'preset'}`]"
