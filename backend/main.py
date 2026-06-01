@@ -178,20 +178,31 @@ def _extract_keywords(text: str) -> list[str]:
     return [kw for kw in _KEYWORD_SEEDS if kw.lower() in low]
 
 
+_NON_TECH_ROLE = re.compile(
+    r'招聘经理|hrbp|人力资源|行政助理|法务|财务|采购|销售总监|商务|运营总监'
+    r'|hr manager|talent acquisition|recruiter',
+    re.I,
+)
+
+
 def _parse_tencent_posts(posts: list[dict]) -> list[dict]:
     result = []
     for i, post in enumerate(posts, start=1):
+        post_name: str = post.get("RecruitPostName", "未知职位")
+        # Skip non-technical roles — they have no business in a tech-job matcher
+        if _NON_TECH_ROLE.search(post_name):
+            continue
         full_text = " ".join([
-            post.get("RecruitPostName", ""),
+            post_name,
             post.get("Responsibility", ""),
             post.get("Requirement", ""),
         ])
         tags = _extract_tags(full_text) or ["技术岗位"]
-        keywords = _extract_keywords(full_text) or ["python", "算法"]
+        # No keyword fallback: jobs with zero matching keywords naturally score low
+        keywords = _extract_keywords(full_text)
         raw_desc = post.get("Responsibility", "")
         description = (raw_desc[:200].rstrip() + "…") if len(raw_desc) > 200 else raw_desc
         description = description or "参与腾讯核心业务研发与技术创新。"
-        post_name: str = post.get("RecruitPostName", "未知职位")
         post_id = post.get("RecruitPostId", 2000 + i)
         result.append({
             "id": post_id,
