@@ -226,10 +226,36 @@ const statusText = ref('')
 const reportHtml = computed(() => renderMarkdown(report.value))
 
 function renderMarkdown(md) {
-  const lines = md.split('\n'); let html = '', ul = false
-  const inl = s => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  const lines = md.split('\n')
+  let html = '', ul = false, tbuf = []
+
+  const inl = s => s
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+
+  const flushTable = () => {
+    if (tbuf.length < 2) { tbuf.forEach(l => { html += '<p>' + inl(l) + '</p>' }); tbuf = []; return }
+    const cells = row => row.split('|').slice(1, -1).map(c => c.trim())
+    const heads = cells(tbuf[0])
+    html += '<div class="tbl-wrap"><table class="md-tbl"><thead><tr>'
+    heads.forEach(h => { html += `<th>${inl(h)}</th>` })
+    html += '</tr></thead><tbody>'
+    tbuf.slice(2).forEach(row => {
+      html += '<tr>'
+      cells(row).forEach(c => { html += `<td>${inl(c)}</td>` })
+      html += '</tr>'
+    })
+    html += '</tbody></table></div>'
+    tbuf = []
+  }
+
   for (const raw of lines) {
     const t = raw.trim()
+    if (t.startsWith('|')) {
+      if (ul) { html += '</ul>'; ul = false }
+      tbuf.push(t); continue
+    }
+    if (tbuf.length) flushTable()
     if (!t) { if (ul) { html += '</ul>'; ul = false } continue }
     if (t.startsWith('## ')) { if (ul) { html += '</ul>'; ul = false } html += '<h2>' + inl(t.slice(3)) + '</h2>'; continue }
     if (t.startsWith('- ')) { if (!ul) { html += '<ul>'; ul = true } html += '<li>' + inl(t.slice(2)) + '</li>'; continue }
@@ -238,6 +264,7 @@ function renderMarkdown(md) {
     if (ul) { html += '</ul>'; ul = false }
     html += '<p>' + inl(t) + '</p>'
   }
+  if (tbuf.length) flushTable()
   if (ul) html += '</ul>'
   return html
 }
@@ -427,6 +454,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .rbox h2 { font-size: .95rem; margin: 20px 0 8px; padding-bottom: 6px; border-bottom: 2px solid #FFFBEB; }
 .rbox h2:first-child { margin-top: 0; }
 .rbox ul { padding-left: 22px; }
+.tbl-wrap { overflow-x: auto; margin: 10px 0; }
+.md-tbl { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.md-tbl th, .md-tbl td { border: 1px solid var(--g2); padding: 8px 12px; text-align: left; vertical-align: top; line-height: 1.6; }
+.md-tbl th { background: #F8FAFC; font-weight: 700; white-space: nowrap; }
+.md-tbl tr:nth-child(even) td { background: #FAFBFC; }
 
 /* Recruiter form */
 .rec-title { font-size: 1.35rem; font-weight: 800; margin-bottom: 24px; }
