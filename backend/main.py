@@ -16,7 +16,7 @@ import docx  # python-docx
 import openpyxl
 from PIL import Image
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, HTTPException, Header
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -77,28 +77,25 @@ def _init_db() -> None:
     if "platform" not in existing:
         cur.execute("ALTER TABLE jobs ADD COLUMN platform TEXT DEFAULT ''")
     con.commit()
+    cur.executemany(
+        "INSERT OR IGNORE INTO jobs "
+        "(id,company,title,location,salary,type,tags,description,keywords,source_type,url) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        [
+            (
+                j["id"], j["company"], j["title"], j["location"],
+                j["salary"], j["type"],
+                json.dumps(j["tags"], ensure_ascii=False),
+                j["description"],
+                json.dumps(j["keywords"], ensure_ascii=False),
+                "preset", "",
+            )
+            for j in _SEED_JOBS
+        ],
+    )
+    con.commit()
     count = cur.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-    if count == 0:
-        cur.executemany(
-            "INSERT OR IGNORE INTO jobs "
-            "(id,company,title,location,salary,type,tags,description,keywords,source_type,url) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            [
-                (
-                    j["id"], j["company"], j["title"], j["location"],
-                    j["salary"], j["type"],
-                    json.dumps(j["tags"], ensure_ascii=False),
-                    j["description"],
-                    json.dumps(j["keywords"], ensure_ascii=False),
-                    "preset", "",
-                )
-                for j in _SEED_JOBS
-            ],
-        )
-        con.commit()
-        print(f"[offer-catcher] Seeded {len(_SEED_JOBS)} jobs into jobs.db")
-    else:
-        print(f"[offer-catcher] jobs.db already contains {count} records — skipping seed.")
+    print(f"[offer-catcher] jobs.db: {count} total records ({len(_SEED_JOBS)} preset entries synced).")
     con.close()
 
 
@@ -361,14 +358,21 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
     keyword_score = hit_ratio * skill_weight
     raw = float(base_score + keyword_score - edu_penalty)
 
-    # ── Dim 1: Academic year + seniority filter ──────────────────────
-    # Seniority signals in the job title / type
+    # ── Dim 1: Academic year + job-type preference filter ────────────
     _title = (job.get("title") or "").lower()
     _jtype = (job.get("type")  or "").lower()
     _desc  = (job.get("description") or "").lower()
 
-    is_intern_role = any(kw in _title + _jtype for kw in
-                         ["实习", "校招", "intern", "junior", "graduate", "应届"])
+    # Separate intern from campus-hire from full-time/social
+    is_intern_role = any(kw in _title + _jtype for kw in ["实习", "intern"])
+    is_campus_role = (
+        any(kw in _title + _jtype for kw in ["校招", "graduate", "junior", "应届"])
+        and not is_intern_role
+    )
+    is_fulltime_social = (
+        "社招" in _jtype or "full-time" in _jtype
+        or "fulltime" in _jtype or "full_time" in _jtype
+    )
     is_senior_role = (
         any(sig in _title for sig in [
             "高级", "资深", "专家", "架构师", "首席", "总监", "技术专家",
@@ -378,21 +382,56 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
         or bool(re.search(r'[3-9]\s*年以上|[3-9]\+?\s*years?\s*(of\s*)?exp', _desc, re.I))
     )
 
+    preferred_type = (meta.get("preferred_type") or "").strip()
     grad_year = meta.get("graduation_year")
-    if grad_year:
+
+    if preferred_type and preferred_type not in ("不限", ""):
+        # ── User-explicit type selection (highest priority) ───────────
+        if preferred_type == "实习":
+            if is_intern_role:
+                raw += 20
+            else:
+                raw *= 0.10
+        elif preferred_type == "校招":
+            if is_intern_role:
+                raw += 10
+            elif is_campus_role:
+                raw += 15
+            elif is_senior_role or is_fulltime_social:
+                raw *= 0.10
+        elif preferred_type in ("全职", "社招"):
+            if is_fulltime_social or is_senior_role:
+                raw += 8
+            elif is_intern_role:
+                raw *= 0.50
+    elif grad_year:
         current_year = datetime.now().year
-        if grad_year >= current_year:               # ── still a student ──
+        if grad_year > current_year:
+            # ── In school, not graduating: internships only ───────────
             if is_intern_role:
-                raw += 20                           # strongly boost intern/campus
-            elif is_senior_role:
-                raw *= 0.15                         # near-exclude clearly senior roles
-            elif "社招" in _jtype or "full-time" in _jtype:
-                raw *= 0.45
-        else:                                       # ── already graduated ──
+                raw += 20
+            elif is_campus_role:
+                raw *= 0.12
+            elif is_senior_role or is_fulltime_social:
+                raw *= 0.06
+            else:
+                raw *= 0.12   # unknown type — same as campus penalty
+        elif grad_year == current_year:
+            # ── Graduating this year: intern + campus ─────────────────
             if is_intern_role:
-                raw *= 0.75                         # minor penalty for over-qualified
+                raw += 20
+            elif is_campus_role:
+                raw += 5
             elif is_senior_role:
-                raw += 6                            # boost senior matches for alumni
+                raw *= 0.10
+            elif is_fulltime_social:
+                raw *= 0.20
+        else:
+            # ── Already graduated ─────────────────────────────────────
+            if is_intern_role:
+                raw *= 0.75
+            elif is_senior_role:
+                raw += 6
 
     # ── Dim 2: City preference bonus ─────────────────────────────────
     preferred_city = (meta.get("preferred_city") or "").strip()
@@ -804,6 +843,8 @@ def health():
 @app.post("/api/match")
 async def match_resume(
     file: UploadFile = File(...),
+    preferred_city: str = Form(default=""),
+    preferred_type: str = Form(default=""),
     accept_language: str = Header(default="zh-CN"),
 ):
     lang = "zh" if accept_language.lower().startswith("zh") else "en"
@@ -844,6 +885,12 @@ async def match_resume(
 
     # ── 6. Extract metadata for multi-dim scoring (non-blocking) ─────
     meta = await extract_resume_metadata(resume_text)
+    # User-supplied preferences take priority over LLM-extracted values
+    if preferred_city.strip():
+        meta["preferred_city"] = preferred_city.strip()
+    pt = preferred_type.strip()
+    if pt and pt != "不限":
+        meta["preferred_type"] = pt
     matched = get_top_jobs(resume_text, meta=meta)
 
     async def event_stream():

@@ -27,6 +27,27 @@
           <span v-if="!file">📋 {{ t('upload.drag') }}</span>
           <span v-else>📄 {{ file.name }}</span>
         </label>
+
+        <!-- Job preference filters -->
+        <div class="filter-row">
+          <div class="filter-chip">
+            <span class="flt-lbl">🏙 {{ t('filter.city') }}</span>
+            <select v-model="filters.city" class="flt-sel">
+              <option value="">{{ t('filter.all') }}</option>
+              <option v-for="c in CITIES" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <div class="filter-chip">
+            <span class="flt-lbl">💼 {{ t('filter.type') }}</span>
+            <select v-model="filters.jobType" class="flt-sel">
+              <option value="">{{ t('filter.all') }}</option>
+              <option value="实习">{{ t('filter.intern') }}</option>
+              <option value="校招">{{ t('filter.campus') }}</option>
+              <option value="全职">{{ t('filter.fulltime') }}</option>
+            </select>
+          </div>
+        </div>
+
         <div class="center">
           <button class="btn" :disabled="!file" @click="run">{{ t('btn.run') }}</button>
         </div>
@@ -191,9 +212,12 @@ function toggleMode() {
   showProfile.value = false
 }
 
+const CITIES = ['深圳', '北京', '上海', '广州', '杭州', '成都', '宁德', '西安']
+
 // ── Seeker state ──────────────────────────────────────────────────────
 const phase      = ref('idle')
 const file       = ref(null)
+const filters    = ref({ city: '', jobType: '' })
 const jobs       = ref([])
 const report     = ref('')
 const err        = ref('')
@@ -247,6 +271,8 @@ async function run() {
   try {
     const fd = new FormData()
     fd.append('file', file.value)
+    if (filters.value.city) fd.append('preferred_city', filters.value.city)
+    if (filters.value.jobType) fd.append('preferred_type', filters.value.jobType)
     const resp = await fetch(`${API_BASE}/api/match`, {
       method: 'POST',
       headers: { 'Accept-Language': locale.value === 'zh' ? 'zh-CN' : 'en-US' },
@@ -361,6 +387,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .sub { text-align: center; color: var(--g5); margin: 14px auto 28px; max-width: 480px; }
 .upload { display: block; border: 2px dashed var(--g2); border-radius: 14px; background: #fff; padding: 48px; text-align: center; cursor: pointer; font-weight: 600; }
 .upload:hover { border-color: var(--y); background: #FFFBEB; }
+.filter-row { display: flex; justify-content: center; gap: 16px; margin: 14px 0 4px; flex-wrap: wrap; }
+.filter-chip { display: flex; align-items: center; gap: 7px; }
+.flt-lbl { font-size: .8rem; color: var(--g5); font-weight: 600; }
+.flt-sel { border: 1px solid var(--g2); border-radius: 20px; padding: 5px 12px; font-size: .82rem; background: #fff; cursor: pointer; appearance: none; -webkit-appearance: none; }
+.flt-sel:focus { outline: none; border-color: var(--y); }
 .center { text-align: center; margin-top: 20px; }
 .btn { background: var(--y); border: none; border-radius: 8px; padding: 13px 32px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 10px rgba(255,215,0,.35); }
 .btn:hover:not([disabled]) { background: var(--yh); }

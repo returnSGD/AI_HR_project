@@ -3298,5 +3298,203 @@
       "算法",
       "车辆控制"
     ]
+  },
+  {
+    "id": 101,
+    "company": "字节跳动",
+    "title": "推荐算法实习生 - 抖音",
+    "location": "北京·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Python", "PyTorch", "推荐系统", "深度学习", "特征工程"],
+    "description": "参与抖音短视频推荐系统召回与排序算法研发，提升用户留存与视频互动指标。",
+    "keywords": ["python", "pytorch", "推荐系统", "深度学习", "机器学习", "特征工程", "embedding", "ctr", "召回", "排序", "tensorflow", "算法", "数据", "faiss", "双塔模型"]
+  },
+  {
+    "id": 102,
+    "company": "字节跳动",
+    "title": "Android开发实习生 - 抖音",
+    "location": "北京·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Java", "Kotlin", "Android", "Jetpack", "性能优化"],
+    "description": "参与抖音Android端核心功能研发，负责音视频播放体验与首屏启动优化。",
+    "keywords": ["java", "kotlin", "android", "音视频", "性能优化", "okhttp", "jetpack", "mvvm", "协程", "内存", "启动优化", "多线程", "app开发", "移动开发", "rxjava"]
+  },
+  {
+    "id": 103,
+    "company": "大疆",
+    "title": "嵌入式软件实习生 - 飞控",
+    "location": "深圳·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["C", "C++", "FreeRTOS", "STM32", "飞控"],
+    "description": "参与无人机飞控嵌入式软件开发，协助姿态控制算法调试与传感器驱动开发。",
+    "keywords": ["c", "c++", "rtos", "freertos", "stm32", "嵌入式", "飞控", "pid", "imu", "传感器", "驱动", "单片机", "实时系统", "裸机", "can"]
+  },
+  {
+    "id": 104,
+    "company": "大疆",
+    "title": "计算机视觉算法实习生 - 无人机",
+    "location": "深圳·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Python", "C++", "PyTorch", "OpenCV", "目标检测"],
+    "description": "参与无人机机载视觉系统研发，负责目标检测与追踪算法在嵌入式端优化部署。",
+    "keywords": ["python", "c++", "pytorch", "opencv", "目标检测", "深度学习", "yolo", "计算机视觉", "cuda", "tensorrt", "嵌入式", "算法", "目标追踪", "图像处理", "实时"]
+  },
+  {
+    "id": 105,
+    "company": "华为",
+    "title": "AI算法实习生 - 昇腾",
+    "location": "深圳·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Python", "PyTorch", "深度学习", "NPU", "量化"],
+    "description": "参与昇腾AI芯片算子开发与大模型推理优化，协助量化和端侧推理性能调优。",
+    "keywords": ["python", "pytorch", "深度学习", "npu", "量化", "推理优化", "cuda", "算子", "大模型", "llm", "tensorflow", "性能优化", "算法", "c++", "模型部署"]
+  },
+  {
+    "id": 106,
+    "company": "华为",
+    "title": "前端开发实习生 - 华为云",
+    "location": "成都·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Vue", "TypeScript", "React", "Node.js", "数据可视化"],
+    "description": "参与华为云控制台前端研发，负责云服务数据可视化大屏与表单组件开发。",
+    "keywords": ["vue", "typescript", "react", "javascript", "node.js", "前端开发", "webpack", "vite", "css", "html", "性能优化", "echarts", "webgl", "api", "响应式"]
+  },
+  {
+    "id": 107,
+    "company": "阿里巴巴",
+    "title": "Java后端实习生 - 淘宝",
+    "location": "杭州·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Java", "Spring Boot", "MySQL", "Redis", "分布式"],
+    "description": "参与淘宝交易核心链路后端研发，负责微服务接口开发与数据库性能优化。",
+    "keywords": ["java", "spring boot", "mysql", "redis", "分布式", "微服务", "rocketmq", "kafka", "jvm", "后台开发", "api", "高并发", "数据库", "缓存", "maven"]
+  },
+  {
+    "id": 108,
+    "company": "阿里巴巴",
+    "title": "前端开发实习生 - 钉钉",
+    "location": "杭州·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["React", "TypeScript", "Node.js", "微前端", "低代码"],
+    "description": "参与钉钉办公协作产品前端研发，负责低代码表单引擎与移动端适配开发。",
+    "keywords": ["react", "typescript", "node.js", "微前端", "低代码", "javascript", "css", "html", "前端开发", "webpack", "vite", "性能优化", "ssr", "工程化", "跨端"]
+  },
+  {
+    "id": 109,
+    "company": "百度",
+    "title": "自动驾驶感知算法实习生 - Apollo",
+    "location": "北京·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Python", "C++", "PyTorch", "BEV感知", "激光雷达"],
+    "description": "参与Apollo自动驾驶感知模块研发，协助多传感器融合与BEV 3D目标检测算法开发。",
+    "keywords": ["python", "c++", "pytorch", "激光雷达", "深度学习", "点云", "bev", "目标检测", "融合", "自动驾驶", "计算机视觉", "算法", "camera", "transformer", "cuda"]
+  },
+  {
+    "id": 110,
+    "company": "百度",
+    "title": "NLP大模型实习生 - 文心",
+    "location": "北京·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Python", "PyTorch", "LLM", "RLHF", "Transformer"],
+    "description": "参与文心一言大语言模型微调与对齐研发，协助RLHF训练流程与评估体系建设。",
+    "keywords": ["python", "pytorch", "llm", "rlhf", "transformer", "大模型", "微调", "对齐", "自然语言处理", "bert", "gpt", "deepspeed", "算法", "强化学习", "cuda"]
+  },
+  {
+    "id": 111,
+    "company": "小米",
+    "title": "Android开发实习生 - MIUI",
+    "location": "北京·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Java", "Kotlin", "Android", "AOSP", "系统优化"],
+    "description": "参与MIUI/HyperOS系统应用开发，负责系统设置模块与省电性能优化研发。",
+    "keywords": ["java", "kotlin", "android", "aosp", "framework", "性能优化", "binder", "jni", "多线程", "内存", "app开发", "移动开发", "c++", "gradle", "git"]
+  },
+  {
+    "id": 112,
+    "company": "小米",
+    "title": "机器学习实习生 - 小爱同学",
+    "location": "北京·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Python", "PyTorch", "NLP", "LLM", "RAG"],
+    "description": "参与小爱同学大模型应用研发，负责RAG知识检索与多轮对话Agent系统优化。",
+    "keywords": ["python", "pytorch", "nlp", "llm", "rag", "大模型", "向量数据库", "embedding", "faiss", "agent", "langchain", "机器学习", "深度学习", "自然语言处理", "微调"]
+  },
+  {
+    "id": 113,
+    "company": "Apple",
+    "title": "iOS Engineering Intern",
+    "location": "上海·实习",
+    "salary": "Competitive",
+    "type": "实习",
+    "tags": ["Swift", "Objective-C", "iOS", "SwiftUI", "CoreML"],
+    "description": "Join Apple's Shanghai engineering team as an intern. Work on iOS features with mentorship from senior engineers.",
+    "keywords": ["swift", "objective-c", "ios", "swiftui", "uikit", "coreml", "xcode", "性能优化", "内存", "多线程", "app开发", "mobile", "apple", "移动开发", "arc"]
+  },
+  {
+    "id": 114,
+    "company": "Apple",
+    "title": "Machine Learning Research Intern",
+    "location": "上海·实习",
+    "salary": "Competitive",
+    "type": "实习",
+    "tags": ["Python", "PyTorch", "CoreML", "On-device AI", "Model Compression"],
+    "description": "Intern with Apple's ML Research team in Shanghai on on-device AI, exploring quantization and edge inference for iOS/macOS.",
+    "keywords": ["python", "pytorch", "coreml", "machine learning", "deep learning", "on-device", "quantization", "model compression", "nlp", "computer vision", "cuda", "swift", "算法", "大模型", "推理"]
+  },
+  {
+    "id": 115,
+    "company": "宁德时代",
+    "title": "BMS嵌入式软件实习生",
+    "location": "宁德·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["C", "AUTOSAR", "CAN", "BMS", "STM32"],
+    "description": "参与电池管理系统嵌入式软件开发，协助SOC估算算法实现与CAN通信调试工作。",
+    "keywords": ["c", "autosar", "can", "bms", "stm32", "嵌入式", "单片机", "rtos", "电池", "soc", "均衡", "驱动", "freertos", "modbus", "中断"]
+  },
+  {
+    "id": 116,
+    "company": "宁德时代",
+    "title": "数据算法实习生 - 电池预测",
+    "location": "上海·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Python", "PyTorch", "机器学习", "时序预测", "MATLAB"],
+    "description": "参与锂电池SOH退化预测与寿命估计算法研发，基于深度学习建立电化学行为模型。",
+    "keywords": ["python", "pytorch", "机器学习", "深度学习", "时序预测", "matlab", "soh", "电池", "算法", "数据分析", "lstm", "transformer", "回归", "特征工程", "sklearn"]
+  },
+  {
+    "id": 117,
+    "company": "比亚迪",
+    "title": "嵌入式软件实习生 - 车载",
+    "location": "深圳·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["C", "AUTOSAR", "CAN", "STM32", "车载软件"],
+    "description": "参与比亚迪车载ECU嵌入式软件开发，协助AUTOSAR基础软件配置与CAN通信调试。",
+    "keywords": ["c", "autosar", "can", "stm32", "嵌入式", "ecu", "bsw", "rte", "swc", "lin", "车载软件", "单片机", "驱动", "modbus", "uds"]
+  },
+  {
+    "id": 118,
+    "company": "比亚迪",
+    "title": "自动驾驶算法实习生",
+    "location": "深圳·实习",
+    "salary": "竞争性薪酬",
+    "type": "实习",
+    "tags": ["Python", "C++", "PyTorch", "感知算法", "自动驾驶"],
+    "description": "参与比亚迪DiPilot自动驾驶感知算法开发，协助摄像头目标检测与车道线识别研发。",
+    "keywords": ["python", "c++", "pytorch", "深度学习", "计算机视觉", "目标检测", "自动驾驶", "感知", "cuda", "opencv", "yolo", "bev", "算法", "ros", "车道线"]
   }
 ]

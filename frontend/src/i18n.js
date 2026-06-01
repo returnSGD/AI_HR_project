@@ -15,6 +15,7 @@ const messages = {
     section: { jobs: '📊 找到前 {n} 个匹配职位', report: '🤖 AI 诊断报告', generating: '生成中…', complete: '完成 ✓' },
     error: { pdf: '请选择 PDF 文件。', fileType: '不支持的文件格式，请上传 PDF、Word、Excel、图片、TXT 或 MD 文件。', api: '发生意外错误，请稍后重试。' },
     source: { preset: '📦 预设', crawled: '🌐 真实抓取', user_posted: '🏢 企业直招' },
+    filter: { city: '目标城市', type: '岗位类型', all: '不限', intern: '实习', campus: '校招', fulltime: '全职' },
     mode: { seeker: '求职者', recruiter: '招聘者' },
     recruiter: {
       title: '发布岗位',
@@ -52,6 +53,7 @@ const messages = {
     section: { jobs: '📊 Top {n} Matches Found', report: '🤖 AI Diagnostic Report', generating: 'Generating…', complete: 'Complete ✓' },
     error: { pdf: 'Please select a PDF file.', fileType: 'Unsupported format. Please upload PDF, Word, Excel, image, TXT, or MD.', api: 'An unexpected error occurred. Please try again.' },
     source: { preset: '📦 Preset', crawled: '🌐 Live', user_posted: '🏢 Direct' },
+    filter: { city: 'Target City', type: 'Job Type', all: 'Any', intern: 'Intern', campus: 'Campus Hire', fulltime: 'Full-time' },
     mode: { seeker: 'Job Seeker', recruiter: 'Recruiter' },
     recruiter: {
       title: 'Post a Job',
