@@ -810,8 +810,9 @@ def _parse_tencent_posts(posts: list[dict]) -> list[dict]:
         description = (raw_desc[:200].rstrip() + "…") if len(raw_desc) > 200 else raw_desc
         description = description or "参与腾讯核心业务研发与技术创新。"
         post_name: str = post.get("RecruitPostName", "未知职位")
+        post_id = post.get("RecruitPostId", 2000 + i)
         result.append({
-            "id": post.get("RecruitPostId", 2000 + i),
+            "id": post_id,
             "company": "腾讯",
             "color": COMPANY_COLORS["腾讯"],
             "title": post_name,
@@ -821,6 +822,8 @@ def _parse_tencent_posts(posts: list[dict]) -> list[dict]:
             "tags": tags,
             "description": description,
             "keywords": keywords,
+            "source_type": "crawled",
+            "url": f"https://careers.tencent.com/jobdesc.html?postId={post_id}",
         })
     return result
 
