@@ -361,19 +361,38 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
     keyword_score = hit_ratio * skill_weight
     raw = float(base_score + keyword_score - edu_penalty)
 
-    # ── Dim 1: Academic year filter ───────────────────────────────────
+    # ── Dim 1: Academic year + seniority filter ──────────────────────
+    # Seniority signals in the job title / type
+    _title = (job.get("title") or "").lower()
+    _jtype = (job.get("type")  or "").lower()
+    _desc  = (job.get("description") or "").lower()
+
+    is_intern_role = any(kw in _title + _jtype for kw in
+                         ["实习", "校招", "intern", "junior", "graduate", "应届"])
+    is_senior_role = (
+        any(sig in _title for sig in [
+            "高级", "资深", "专家", "架构师", "首席", "总监", "技术专家",
+            "senior", "principal", "staff", "lead", "architect", "director",
+            "p6", "p7", "p8", "p9", "t7", "t8", "t9",
+        ])
+        or bool(re.search(r'[3-9]\s*年以上|[3-9]\+?\s*years?\s*(of\s*)?exp', _desc, re.I))
+    )
+
     grad_year = meta.get("graduation_year")
     if grad_year:
         current_year = datetime.now().year
-        job_type = job.get("type", "")
-        if grad_year >= current_year:                     # still a student
-            if any(kw in job_type for kw in ["实习", "校招", "Intern"]):
-                raw += 12
-            elif "社招" in job_type or "Full-time" in job_type:
-                raw *= 0.5
-        else:                                             # already graduated
-            if any(kw in job_type for kw in ["实习", "校招", "Intern"]):
-                raw *= 0.8
+        if grad_year >= current_year:               # ── still a student ──
+            if is_intern_role:
+                raw += 20                           # strongly boost intern/campus
+            elif is_senior_role:
+                raw *= 0.15                         # near-exclude clearly senior roles
+            elif "社招" in _jtype or "full-time" in _jtype:
+                raw *= 0.45
+        else:                                       # ── already graduated ──
+            if is_intern_role:
+                raw *= 0.75                         # minor penalty for over-qualified
+            elif is_senior_role:
+                raw += 6                            # boost senior matches for alumni
 
     # ── Dim 2: City preference bonus ─────────────────────────────────
     preferred_city = (meta.get("preferred_city") or "").strip()
@@ -395,10 +414,22 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
     return min(max(int(raw), 5), 98)
 
 
+_STUDENT_TEXT_SIGNALS = re.compile(
+    r'在读|应届|实习生|大[一二三四]|研[一二三]|研究生一|master student|undergraduate|'
+    r'expected.*graduation|预计.*毕业|毕业时间.*202[5-9]',
+    re.I,
+)
+
 def get_top_jobs(text: str, n: int = 3, meta: Optional[dict] = None) -> list[dict]:
     tokens = tokenize(text)
+
+    # Text-based student fallback: if graduation_year missing but resume signals student
+    effective_meta = meta or {}
+    if not effective_meta.get("graduation_year") and _STUDENT_TEXT_SIGNALS.search(text):
+        effective_meta = {**effective_meta, "graduation_year": datetime.now().year}
+
     jobs = _load_all_jobs()
-    scored = [{**j, "score": score_job(tokens, j, meta)} for j in jobs]
+    scored = [{**j, "score": score_job(tokens, j, effective_meta or None)} for j in jobs]
     return sorted(scored, key=lambda x: x["score"], reverse=True)[:n]
 
 
