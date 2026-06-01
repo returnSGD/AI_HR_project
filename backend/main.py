@@ -1,5 +1,6 @@
 # Path: offer-catcher/backend/main.py
 """Offer-Catcher API — FastAPI backend with SQLite job store and language-aware AI reports."""
+import asyncio
 import json
 import os
 import re
@@ -260,6 +261,83 @@ async def fetch_real_jobs() -> list[dict]:
     return collected
 
 
+# ── On-demand resume-targeted crawl ──────────────────────────────────
+
+# Maps resume skill signals → Tencent search keyword
+_QUERY_RULES: list[tuple[list[str], str]] = [
+    (["深度学习", "pytorch", "tensorflow", "大模型", "llm", "rlhf"],  "算法工程师"),
+    (["计算机视觉", "opencv", "目标检测", "yolo", "点云"],            "计算机视觉"),
+    (["nlp", "自然语言处理", "bert", "gpt", "transformer"],           "NLP工程师"),
+    (["android", "kotlin", "安卓"],                                    "Android开发"),
+    (["ios", "swift", "objective-c"],                                  "iOS开发"),
+    (["react", "vue", "前端开发", "typescript", "javascript"],         "前端开发"),
+    (["golang", "微服务", "grpc"],                                     "后台开发"),
+    (["java", "spring"],                                               "后台开发"),
+    (["嵌入式", "stm32", "rtos", "单片机", "驱动", "fpga"],            "嵌入式开发"),
+    (["自动驾驶", "slam", "ros", "激光雷达"],                          "自动驾驶"),
+    (["大数据", "spark", "flink", "hive"],                             "数据工程师"),
+    (["安全", "逆向", "漏洞", "ctf", "pwn"],                          "安全工程师"),
+    (["游戏", "unreal", "unity", "shader", "渲染"],                    "游戏开发"),
+    (["rust", "系统编程"],                                             "后台开发"),
+]
+
+
+def _resume_to_queries(resume_text: str, preferred_type: str = "") -> list[str]:
+    """Derive ≤3 Tencent search keywords from resume content + preferred type."""
+    low = resume_text.lower()
+    seen: set[str] = set()
+    domain_queries: list[str] = []
+    for signals, query in _QUERY_RULES:
+        if any(s in low for s in signals):
+            if query not in seen:
+                seen.add(query)
+                domain_queries.append(query)
+            if len(domain_queries) >= 2:
+                break
+
+    type_query = "实习生" if preferred_type == "实习" else "校园招聘"
+    # type_query first so intern/campus jobs dominate the crawl result
+    return ([type_query] + domain_queries)[:3]
+
+
+async def fetch_jobs_for_resume(resume_text: str, preferred_type: str = "") -> list[dict]:
+    """Real-time targeted crawl based on resume content. Returns [] on any error."""
+    queries = _resume_to_queries(resume_text, preferred_type)
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://careers.tencent.com/",
+    }
+    collected: list[dict] = []
+    seen_ids: set = set()
+    try:
+        async with httpx.AsyncClient(timeout=6.0, headers=headers) as client:
+            for keyword in queries:
+                url = (
+                    "https://careers.tencent.com/tencentcareer/api/post/Query"
+                    f"?timestamp={int(time.time() * 1000)}"
+                    f"&keyword={keyword}&pageIndex=1&pageSize=6&language=zh-cn&area=cn"
+                )
+                try:
+                    resp = await client.get(url)
+                    resp.raise_for_status()
+                    posts = resp.json().get("Data", {}).get("Posts") or []
+                    for job in _parse_tencent_posts(posts):
+                        if job["id"] not in seen_ids:
+                            seen_ids.add(job["id"])
+                            collected.append(job)
+                except Exception as e:
+                    print(f"[offer-catcher] On-demand '{keyword}': {e!r}")
+    except Exception as exc:
+        print(f"[offer-catcher] On-demand crawl unreachable: {exc!r}")
+    if collected:
+        print(f"[offer-catcher] On-demand: {len(collected)} live jobs for {queries}")
+    return collected
+
+
 # ── App lifecycle ─────────────────────────────────────────────────────
 
 @asynccontextmanager
@@ -472,7 +550,12 @@ _STUDENT_TEXT_SIGNALS = re.compile(
 
 _MAX_PER_COMPANY = 2   # diversity cap: no single company dominates the results
 
-def get_top_jobs(text: str, n: int = 10, meta: Optional[dict] = None) -> list[dict]:
+def get_top_jobs(
+    text: str,
+    n: int = 10,
+    meta: Optional[dict] = None,
+    extra_jobs: Optional[list] = None,
+) -> list[dict]:
     tokens = tokenize(text)
 
     # Text-based student fallback: if graduation_year missing but resume signals student
@@ -481,6 +564,14 @@ def get_top_jobs(text: str, n: int = 10, meta: Optional[dict] = None) -> list[di
         effective_meta = {**effective_meta, "graduation_year": datetime.now().year}
 
     jobs = _load_all_jobs()
+
+    # Merge on-demand live jobs that aren't already in the DB
+    if extra_jobs:
+        existing_ids = {j["id"] for j in jobs}
+        for ej in extra_jobs:
+            if ej["id"] not in existing_ids:
+                ej.setdefault("color", COMPANY_COLORS.get(ej.get("company", ""), "#6B7280"))
+                jobs.append(ej)
     scored = sorted(
         [{**j, "score": score_job(tokens, j, effective_meta or None)} for j in jobs],
         key=lambda x: x["score"],
@@ -921,15 +1012,18 @@ async def match_resume(
     if not _looks_like_resume(resume_text):
         raise HTTPException(status_code=422, detail=_err("not_resume", lang))
 
-    # ── 6. Extract metadata for multi-dim scoring (non-blocking) ─────
-    meta = await extract_resume_metadata(resume_text)
+    # ── 6. Parallel: LLM metadata extraction + resume-targeted live crawl ──
+    meta, live_jobs = await asyncio.gather(
+        extract_resume_metadata(resume_text),
+        fetch_jobs_for_resume(resume_text, preferred_type.strip()),
+    )
     # User-supplied preferences take priority over LLM-extracted values
     if preferred_city.strip():
         meta["preferred_city"] = preferred_city.strip()
     pt = preferred_type.strip()
     if pt and pt != "不限":
         meta["preferred_type"] = pt
-    matched = get_top_jobs(resume_text, meta=meta)
+    matched = get_top_jobs(resume_text, meta=meta, extra_jobs=live_jobs)
 
     async def event_stream():
         yield f"data: {json.dumps({'type': 'jobs', 'jobs': matched})}\n\n"
