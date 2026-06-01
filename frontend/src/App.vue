@@ -7,75 +7,188 @@
     </div>
   </header>
 
+  <!-- Toast -->
+  <Transition name="toast">
+    <div v-if="toast" class="toast">{{ toast }}</div>
+  </Transition>
+
   <main class="main">
     <div v-if="err" class="err">⚠️ {{ err }}</div>
 
-    <!-- IDLE -->
-    <template v-if="phase === 'idle'">
-      <h1 v-if="locale === 'zh'" class="h1">{{ t('hero.l1') }}<br><span class="ac">{{ t('hero.accent') }}</span></h1>
-      <h1 v-else class="h1">{{ t('hero.l1') }} <span class="ac">{{ t('hero.accent') }}</span><br>{{ t('hero.l2') }}</h1>
-      <p class="sub">{{ t('hero.sub') }}</p>
+    <!-- ── SEEKER MODE ──────────────────────────────────────── -->
+    <template v-if="mode === 'seeker'">
+      <template v-if="phase === 'idle'">
+        <h1 v-if="locale === 'zh'" class="h1">{{ t('hero.l1') }}<br><span class="ac">{{ t('hero.accent') }}</span></h1>
+        <h1 v-else class="h1">{{ t('hero.l1') }} <span class="ac">{{ t('hero.accent') }}</span><br>{{ t('hero.l2') }}</h1>
+        <p class="sub">{{ t('hero.sub') }}</p>
 
-      <label class="upload">
-        <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls,.md,.txt,.jpg,.jpeg,.png" @change="pick" hidden>
-        <span v-if="!file">📋 {{ t('upload.drag') }}</span>
-        <span v-else>📄 {{ file.name }}</span>
-      </label>
-      <div class="center">
-        <button class="btn" :disabled="!file" @click="run">{{ t('btn.run') }}</button>
-      </div>
+        <label class="upload">
+          <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls,.md,.txt,.jpg,.jpeg,.png" @change="pick" hidden>
+          <span v-if="!file">📋 {{ t('upload.drag') }}</span>
+          <span v-else>📄 {{ file.name }}</span>
+        </label>
+        <div class="center">
+          <button class="btn" :disabled="!file" @click="run">{{ t('btn.run') }}</button>
+        </div>
+      </template>
+
+      <template v-else>
+        <div v-if="phase === 'loading'" class="status">⏳ {{ statusText }}</div>
+
+        <div v-if="jobs.length">
+          <div class="slabel">{{ t('section.jobs', { n: jobs.length }) }}</div>
+          <div v-for="(j, i) in jobs" :key="j.id" :class="['job', i === 0 && 'top']">
+            <div class="job-top">
+              <div>
+                <div class="co">{{ j.company }}</div>
+                <div class="ti">{{ j.title }}</div>
+              </div>
+              <div class="job-right">
+                <!-- Source tag -->
+                <component
+                  :is="j.source_type === 'crawled' && j.url ? 'a' : 'span'"
+                  :href="j.source_type === 'crawled' && j.url ? j.url : undefined"
+                  :target="j.source_type === 'crawled' && j.url ? '_blank' : undefined"
+                  :class="['src-tag', `src-${j.source_type || 'preset'}`]"
+                >{{ t(`source.${j.source_type || 'preset'}`) }}</component>
+                <div class="score">{{ j.score }}%<span>{{ t('job.match') }}</span></div>
+              </div>
+            </div>
+            <div class="tags"><span v-for="tg in j.tags" :key="tg">{{ tg }}</span></div>
+          </div>
+        </div>
+
+        <div v-if="report" class="slabel">
+          {{ t('section.report') }}
+          <span class="bdg">{{ phase === 'done' ? t('section.complete') : t('section.generating') }}</span>
+        </div>
+        <div v-if="report" class="rbox" v-html="reportHtml"></div>
+
+        <div v-if="phase === 'done'" class="center">
+          <button class="btn" @click="reset">{{ t('btn.again') }}</button>
+        </div>
+      </template>
     </template>
 
-    <!-- WORKING / RESULTS -->
+    <!-- ── RECRUITER MODE ───────────────────────────────────── -->
     <template v-else>
-      <div v-if="phase === 'loading'" class="status">⏳ {{ statusText }}</div>
+      <h2 class="rec-title">{{ t('recruiter.title') }}</h2>
 
-      <div v-if="jobs.length">
-        <div class="slabel">{{ t('section.jobs', { n: jobs.length }) }}</div>
-        <div v-for="(j, i) in jobs" :key="j.id" :class="['job', i === 0 && 'top']">
-          <div class="job-top">
-            <div>
-              <div class="co">{{ j.company }}</div>
-              <div class="ti">{{ j.title }}</div>
-            </div>
-            <div class="score">{{ j.score }}%<span>{{ t('job.match') }}</span></div>
+      <div class="form">
+        <div class="row2">
+          <div class="field">
+            <label>{{ t('recruiter.company') }} <span class="req">*</span></label>
+            <input v-model="jd.company" :placeholder="t('recruiter.companyPh')" class="inp" />
           </div>
-          <div class="tags"><span v-for="tg in j.tags" :key="tg">{{ tg }}</span></div>
+          <div class="field">
+            <label>{{ t('recruiter.jobTitle') }} <span class="req">*</span></label>
+            <input v-model="jd.title" :placeholder="t('recruiter.jobTitlePh')" class="inp" />
+          </div>
         </div>
-      </div>
-
-      <div v-if="report" class="slabel">
-        {{ t('section.report') }}
-        <span class="bdg">{{ phase === 'done' ? t('section.complete') : t('section.generating') }}</span>
-      </div>
-      <div v-if="report" class="rbox" v-html="reportHtml"></div>
-
-      <div v-if="phase === 'done'" class="center">
-        <button class="btn" @click="reset">{{ t('btn.again') }}</button>
+        <div class="row2">
+          <div class="field">
+            <label>{{ t('recruiter.salary') }}</label>
+            <input v-model="jd.salary" :placeholder="t('recruiter.salaryPh')" class="inp" />
+          </div>
+          <div class="field">
+            <label>{{ t('recruiter.location') }}</label>
+            <input v-model="jd.location" :placeholder="t('recruiter.locationPh')" class="inp" />
+          </div>
+        </div>
+        <div class="field">
+          <label>{{ t('recruiter.tags') }}</label>
+          <input v-model="jd.tagsRaw" :placeholder="t('recruiter.tagsPh')" class="inp" />
+        </div>
+        <div class="field">
+          <label>{{ t('recruiter.desc') }}</label>
+          <div class="ta-wrap">
+            <textarea v-model="jd.description" :placeholder="t('recruiter.descPh')" class="ta" rows="6" />
+            <button class="ai-btn" :disabled="aiLoading" @click="aiPolish">
+              {{ aiLoading ? t('recruiter.aiLoading') : t('recruiter.aiBtn') }}
+            </button>
+          </div>
+        </div>
+        <div class="center">
+          <button class="btn" :disabled="publishing" @click="publish">
+            {{ publishing ? '…' : t('recruiter.submit') }}
+          </button>
+        </div>
       </div>
     </template>
 
     <div class="footer">{{ t('footer') }}</div>
   </main>
 
-  <MyProfile v-model="showProfile" />
+  <!-- Profile panel -->
+  <Transition name="slide">
+    <div v-if="showProfile" class="overlay" @click.self="showProfile = false">
+      <div class="panel">
+        <div class="panel-hdr">
+          <span class="panel-title">{{ t('profile.title') }}</span>
+          <button class="close" @click="showProfile = false">✕</button>
+        </div>
+        <div class="avatar">👤</div>
+        <div class="uname">{{ t('profile.guest') }}</div>
+        <div class="usub">{{ t('profile.guestSub') }}</div>
+
+        <!-- Mode toggle -->
+        <div class="toggle-row">
+          <span :class="['tog-lbl', mode === 'seeker' && 'tog-active']">{{ t('mode.seeker') }}</span>
+          <button class="tog" :class="{ 'tog-on': mode === 'recruiter' }" @click="toggleMode">
+            <span class="tog-thumb" />
+          </button>
+          <span :class="['tog-lbl', mode === 'recruiter' && 'tog-active']">{{ t('mode.recruiter') }}</span>
+        </div>
+
+        <div class="divider" />
+        <div class="prow"><span>{{ t('profile.langLabel') }}</span>
+          <select class="sel" @change="e => { setLocale(e.target.value) }">
+            <option value="zh" :selected="locale === 'zh'">中文</option>
+            <option value="en" :selected="locale === 'en'">English</option>
+          </select>
+        </div>
+        <div class="divider" />
+        <div class="about-title">{{ t('profile.about') }}</div>
+        <div class="about-desc">{{ t('profile.aboutDesc') }}</div>
+        <div class="ver">{{ t('profile.version') }}</div>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import MyProfile from './components/MyProfile.vue'
+import { setLocale } from './i18n.js'
 
-const API = 'https://offer-catcher-api.onrender.com/api/match'
+const API_BASE = 'https://offer-catcher-api.onrender.com'
 const { t, locale } = useI18n()
 
-const phase = ref('idle')        // idle | loading | streaming | done
-const file = ref(null)
-const jobs = ref([])
-const report = ref('')
-const err = ref('')
-const statusText = ref('')
+// ── Global state ──────────────────────────────────────────────────────
+const mode        = ref(localStorage.getItem('oc_mode') || 'seeker') // 'seeker' | 'recruiter'
 const showProfile = ref(false)
+const toast       = ref('')
+let   toastTimer  = null
+
+function showToast(msg) {
+  toast.value = msg
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toast.value = '' }, 2800)
+}
+
+function toggleMode() {
+  mode.value = mode.value === 'seeker' ? 'recruiter' : 'seeker'
+  localStorage.setItem('oc_mode', mode.value)
+  showProfile.value = false
+}
+
+// ── Seeker state ──────────────────────────────────────────────────────
+const phase      = ref('idle')
+const file       = ref(null)
+const jobs       = ref([])
+const report     = ref('')
+const err        = ref('')
+const statusText = ref('')
 
 const reportHtml = computed(() => renderMarkdown(report.value))
 
@@ -125,7 +238,7 @@ async function run() {
   try {
     const fd = new FormData()
     fd.append('file', file.value)
-    const resp = await fetch(API, {
+    const resp = await fetch(`${API_BASE}/api/match`, {
       method: 'POST',
       headers: { 'Accept-Language': locale.value === 'zh' ? 'zh-CN' : 'en-US' },
       body: fd
@@ -163,12 +276,62 @@ function reset() {
   phase.value = 'idle'; file.value = null; jobs.value = []
   report.value = ''; err.value = ''
 }
+
+// ── Recruiter state ───────────────────────────────────────────────────
+const jd = ref({ company: '', title: '', salary: '', location: '', tagsRaw: '', description: '' })
+const aiLoading  = ref(false)
+const publishing = ref(false)
+
+async function aiPolish() {
+  if (!jd.value.description.trim()) return
+  aiLoading.value = true
+  err.value = ''
+  try {
+    const resp = await fetch(`${API_BASE}/api/generate-jd`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_text: jd.value.description }),
+    })
+    if (!resp.ok) throw new Error('HTTP ' + resp.status)
+    const data = await resp.json()
+    jd.value.description = data.jd
+  } catch (e) {
+    err.value = e.message || t('error.api')
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+async function publish() {
+  if (!jd.value.company.trim() || !jd.value.title.trim()) {
+    err.value = t('recruiter.required'); return
+  }
+  publishing.value = true
+  err.value = ''
+  try {
+    const tags = jd.value.tagsRaw.split(',').map(s => s.trim()).filter(Boolean)
+    const resp = await fetch(`${API_BASE}/api/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...jd.value, tags, keywords: tags.map(t => t.toLowerCase()) }),
+    })
+    if (!resp.ok) throw new Error('HTTP ' + resp.status)
+    jd.value = { company: '', title: '', salary: '', location: '', tagsRaw: '', description: '' }
+    showToast(t('recruiter.toast'))
+  } catch (e) {
+    err.value = e.message || t('error.api')
+  } finally {
+    publishing.value = false
+  }
+}
 </script>
 
 <style>
-:root { --y: #FFD700; --yh: #F0C800; --dk: #0F172A; --g5: #64748B; --g2: #E2E8F0; }
+:root { --y: #FFD700; --yh: #F0C800; --dk: #0F172A; --g5: #64748B; --g2: #E2E8F0; --blue: #3B82F6; --green: #10B981; }
 * { box-sizing: border-box; margin: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8FAFC; color: var(--dk); }
+
+/* Header */
 .hdr { background: #fff; border-bottom: 1px solid var(--g2); height: 58px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; }
 .logo { font-weight: 800; }
 .lb { background: var(--y); border-radius: 8px; padding: 4px 6px; }
@@ -176,6 +339,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .hr { display: flex; align-items: center; gap: 8px; }
 .prof { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--g2); background: #fff; cursor: pointer; }
 .prof:hover { border-color: var(--y); background: #FFFBEB; }
+
+/* Toast */
+.toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: #0F172A; color: #fff; padding: 10px 22px; border-radius: 20px; font-size: .85rem; font-weight: 600; z-index: 1000; pointer-events: none; }
+.toast-enter-active, .toast-leave-active { transition: opacity .25s, transform .25s; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+
+/* Main layout */
 .main { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
 .h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 900; text-align: center; line-height: 1.15; }
 .ac { color: var(--yh); }
@@ -191,18 +361,79 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .err { background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 14px 18px; color: #991B1B; margin-bottom: 20px; }
 .slabel { font-weight: 700; margin: 22px 0 14px; display: flex; align-items: center; gap: 8px; }
 .bdg { font-size: .68rem; font-weight: 700; background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; padding: 2px 8px; border-radius: 20px; }
+
+/* Job card */
 .job { background: #fff; border: 1px solid var(--g2); border-radius: 14px; padding: 18px; margin-bottom: 12px; }
 .job.top { border-top: 3px solid var(--y); }
 .job-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.job-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .co { font-size: .78rem; color: var(--g5); }
 .ti { font-weight: 700; }
 .score { font-size: 1.3rem; font-weight: 900; text-align: right; }
 .score span { display: block; font-size: .62rem; font-weight: 600; color: var(--g5); text-transform: uppercase; }
 .tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .tags span { background: #F8FAFC; border-radius: 5px; padding: 3px 9px; font-size: .76rem; }
+
+/* Source tag */
+.src-tag { font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-decoration: none; white-space: nowrap; }
+.src-preset { background: #F1F5F9; color: #64748B; }
+.src-crawled { background: #EFF6FF; color: var(--blue); }
+.src-crawled:hover { text-decoration: underline; }
+.src-user_posted { background: #ECFDF5; color: var(--green); }
+
+/* Report box */
 .rbox { background: #fff; border: 1px solid var(--g2); border-radius: 14px; padding: 24px; line-height: 1.8; }
 .rbox h2 { font-size: .95rem; margin: 20px 0 8px; padding-bottom: 6px; border-bottom: 2px solid #FFFBEB; }
 .rbox h2:first-child { margin-top: 0; }
 .rbox ul { padding-left: 22px; }
+
+/* Recruiter form */
+.rec-title { font-size: 1.35rem; font-weight: 800; margin-bottom: 24px; }
+.form { display: flex; flex-direction: column; gap: 16px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: .82rem; font-weight: 600; color: var(--g5); }
+.req { color: #EF4444; }
+.inp { border: 1px solid var(--g2); border-radius: 8px; padding: 10px 12px; font-size: .92rem; outline: none; transition: border-color .15s; }
+.inp:focus { border-color: var(--y); }
+.ta-wrap { position: relative; }
+.ta { width: 100%; border: 1px solid var(--g2); border-radius: 8px; padding: 10px 12px; font-size: .92rem; resize: vertical; outline: none; font-family: inherit; transition: border-color .15s; }
+.ta:focus { border-color: var(--y); }
+.ai-btn { position: absolute; bottom: 10px; right: 10px; background: var(--dk); color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-size: .75rem; font-weight: 700; cursor: pointer; transition: opacity .15s; }
+.ai-btn:hover:not([disabled]) { opacity: .8; }
+.ai-btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* Profile panel */
+.overlay { position: fixed; inset: 0; background: rgba(15,23,42,.35); z-index: 500; display: flex; justify-content: flex-end; }
+.panel { background: #fff; width: min(340px, 92vw); height: 100%; padding: 28px 24px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+.panel-hdr { display: flex; align-items: center; justify-content: space-between; }
+.panel-title { font-weight: 800; font-size: 1.05rem; }
+.close { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--g5); }
+.avatar { font-size: 2.5rem; text-align: center; margin-top: 8px; }
+.uname { font-weight: 700; text-align: center; font-size: 1.05rem; }
+.usub { text-align: center; color: var(--g5); font-size: .82rem; }
+.divider { border-top: 1px solid var(--g2); }
+.prow { display: flex; align-items: center; justify-content: space-between; font-size: .88rem; }
+.sel { border: 1px solid var(--g2); border-radius: 6px; padding: 5px 8px; font-size: .85rem; }
+.about-title { font-weight: 700; font-size: .88rem; }
+.about-desc { color: var(--g5); font-size: .82rem; line-height: 1.6; }
+.ver { font-size: .75rem; color: #CBD5E1; text-align: center; margin-top: auto; }
+
+/* Mode toggle */
+.toggle-row { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 4px 0; }
+.tog-lbl { font-size: .82rem; color: var(--g5); transition: color .2s; }
+.tog-lbl.tog-active { color: var(--dk); font-weight: 700; }
+.tog { width: 42px; height: 24px; border-radius: 12px; border: none; background: var(--g2); cursor: pointer; position: relative; transition: background .2s; padding: 0; }
+.tog.tog-on { background: var(--dk); }
+.tog-thumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; display: block; }
+.tog.tog-on .tog-thumb { transform: translateX(18px); }
+
+/* Slide transition for panel */
+.slide-enter-active, .slide-leave-active { transition: opacity .2s; }
+.slide-enter-active .panel, .slide-leave-active .panel { transition: transform .25s cubic-bezier(.4,0,.2,1); }
+.slide-enter-from .panel, .slide-leave-to .panel { transform: translateX(100%); }
+.slide-enter-from, .slide-leave-to { opacity: 0; }
+
 .footer { text-align: center; color: #94A3B8; font-size: .78rem; margin-top: 48px; }
 </style>

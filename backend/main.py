@@ -6,7 +6,8 @@ import re
 import sqlite3
 import time
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
+from pydantic import BaseModel
 
 import httpx
 import fitz  # PyMuPDF
@@ -681,16 +682,24 @@ def _init_db() -> None:
             type        TEXT,
             tags        TEXT,
             description TEXT,
-            keywords    TEXT
+            keywords    TEXT,
+            source_type TEXT DEFAULT 'preset',
+            url         TEXT DEFAULT ''
         )
     """)
+    # Migrate existing DBs that lack the new columns (idempotent)
+    existing = {row[1] for row in cur.execute("PRAGMA table_info(jobs)").fetchall()}
+    if "source_type" not in existing:
+        cur.execute("ALTER TABLE jobs ADD COLUMN source_type TEXT DEFAULT 'preset'")
+    if "url" not in existing:
+        cur.execute("ALTER TABLE jobs ADD COLUMN url TEXT DEFAULT ''")
     con.commit()
     count = cur.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
     if count == 0:
         cur.executemany(
             "INSERT OR IGNORE INTO jobs "
-            "(id,company,title,location,salary,type,tags,description,keywords) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "(id,company,title,location,salary,type,tags,description,keywords,source_type,url) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             [
                 (
                     j["id"], j["company"], j["title"], j["location"],
@@ -698,6 +707,7 @@ def _init_db() -> None:
                     json.dumps(j["tags"], ensure_ascii=False),
                     j["description"],
                     json.dumps(j["keywords"], ensure_ascii=False),
+                    "preset", "",
                 )
                 for j in _SEED_JOBS
             ],
@@ -713,8 +723,8 @@ def _upsert_jobs(jobs: list[dict]) -> None:
     con = sqlite3.connect(DB_PATH)
     con.executemany(
         "INSERT OR REPLACE INTO jobs "
-        "(id,company,title,location,salary,type,tags,description,keywords) "
-        "VALUES (?,?,?,?,?,?,?,?,?)",
+        "(id,company,title,location,salary,type,tags,description,keywords,source_type,url) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         [
             (
                 j["id"], j["company"], j["title"], j.get("location", ""),
@@ -722,6 +732,8 @@ def _upsert_jobs(jobs: list[dict]) -> None:
                 json.dumps(j.get("tags", []), ensure_ascii=False),
                 j.get("description", ""),
                 json.dumps(j.get("keywords", []), ensure_ascii=False),
+                j.get("source_type", "crawled"),
+                j.get("url", ""),
             )
             for j in jobs
         ],
@@ -741,6 +753,8 @@ def _load_all_jobs() -> list[dict]:
         j["tags"] = json.loads(j["tags"] or "[]")
         j["keywords"] = json.loads(j["keywords"] or "[]")
         j["color"] = COMPANY_COLORS.get(j["company"], "#6B7280")
+        j.setdefault("source_type", "preset")
+        j.setdefault("url", "")
         result.append(j)
     return result
 
@@ -1254,3 +1268,86 @@ async def match_resume(
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+# ── Enterprise job posting ────────────────────────────────────────────
+
+class JobPostRequest(BaseModel):
+    company: str
+    title: str
+    location: Optional[str] = ""
+    salary: Optional[str] = "竞争性薪酬"
+    type: Optional[str] = "社招"
+    tags: Optional[list[str]] = []
+    description: Optional[str] = ""
+    keywords: Optional[list[str]] = []
+    url: Optional[str] = ""
+
+
+@app.post("/api/jobs", status_code=201)
+async def post_job(body: JobPostRequest):
+    con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
+    # Use a high-range ID to avoid conflicts with seed (1-100) and crawler (3000+)
+    max_id = cur.execute(
+        "SELECT COALESCE(MAX(id),9000) FROM jobs WHERE id >= 9000"
+    ).fetchone()[0]
+    new_id = max_id + 1
+    cur.execute(
+        "INSERT INTO jobs "
+        "(id,company,title,location,salary,type,tags,description,keywords,source_type,url) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            new_id, body.company, body.title, body.location, body.salary, body.type,
+            json.dumps(body.tags, ensure_ascii=False),
+            body.description,
+            json.dumps(body.keywords, ensure_ascii=False),
+            "user_posted", body.url,
+        ),
+    )
+    con.commit()
+    con.close()
+    return {"id": new_id, "status": "published"}
+
+
+# ── AI JD generation ──────────────────────────────────────────────────
+
+class GenerateJDRequest(BaseModel):
+    raw_text: str
+
+
+_JD_SYSTEM = (
+    "You are a senior HR professional at a top-tier tech company. "
+    "Your task is to rewrite a rough, informal job description into a polished, "
+    "structured, professional JD. "
+    "Output format (Markdown):\n"
+    "## 岗位职责\n- bullet points\n\n## 任职要求\n- bullet points\n\n"
+    "Keep it concise (200-350 words total). Use professional Chinese unless the input is in English. "
+    "Do NOT add a job title or company name section — only responsibilities and requirements."
+)
+
+
+@app.post("/api/generate-jd")
+async def generate_jd(body: GenerateJDRequest):
+    if not body.raw_text.strip():
+        raise HTTPException(400, "raw_text is required")
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.post(
+            f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {LLM_API_KEY.strip()}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": LLM_MODEL,
+                "messages": [
+                    {"role": "system", "content": _JD_SYSTEM},
+                    {"role": "user",   "content": body.raw_text[:1000]},
+                ],
+                "max_tokens": 800,
+                "temperature": 0.6,
+            },
+        )
+    resp.raise_for_status()
+    jd = resp.json()["choices"][0]["message"]["content"].strip()
+    return {"jd": jd}
