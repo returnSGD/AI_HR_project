@@ -334,7 +334,8 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
 
     if meta is None:
         # Legacy path — pure keyword scoring, no metadata
-        return min(int(base_score + hit_ratio * 62), 98)
+        bonus = 8 if job.get("source_type") in ("crawled", "user_posted") else 0
+        return min(int(base_score + hit_ratio * 62) + bonus, 98)
 
     # ── Dim 3: Education tier + breakout ─────────────────────────────
     skill_weight = 62.0
@@ -386,6 +387,10 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
         job_lower = job_text.lower()
         if any(kw in job_lower for kw in _MAJOR_KEYWORDS[major]):
             raw += 5
+
+    # ── Real-job priority bonus ───────────────────────────────────────
+    if job.get("source_type") in ("crawled", "user_posted"):
+        raw += 8
 
     return min(max(int(raw), 5), 98)
 
@@ -515,11 +520,17 @@ def extract_text(data: bytes, content_type: str, filename: str, lang: str) -> st
     Raises HTTPException (with i18n message) on any unrecoverable error.
     """
     ext = (filename or "").rsplit(".", 1)[-1].lower()
-    is_pdf  = content_type in ("application/pdf", "application/octet-stream") or ext == "pdf"
-    is_docx = content_type in (
+    # Extension takes highest precedence — browsers often send generic MIME types.
+    # application/octet-stream must NOT be treated as PDF if ext is docx/xlsx/etc.
+    _non_pdf_exts = {"docx", "doc", "xlsx", "xls", "txt", "md", "jpg", "jpeg", "png"}
+    is_pdf  = ext == "pdf" or (
+        content_type in ("application/pdf", "application/octet-stream")
+        and ext not in _non_pdf_exts
+    )
+    is_docx = ext in ("docx", "doc") or content_type in (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/msword",
-    ) or ext in ("docx", "doc")
+    )
     is_img   = content_type.startswith("image/") or ext in ("jpg", "jpeg", "png")
     is_xlsx  = content_type in (
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
