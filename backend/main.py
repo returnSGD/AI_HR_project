@@ -1025,7 +1025,19 @@ def extract_text(data: bytes, content_type: str, filename: str, lang: str) -> st
         try:
             import io
             document = docx.Document(io.BytesIO(data))
-            return "\n".join(p.text for p in document.paragraphs)
+            parts: list[str] = []
+            # Paragraphs (body text)
+            for para in document.paragraphs:
+                if para.text.strip():
+                    parts.append(para.text)
+            # Table cells — Chinese CV templates commonly use table layouts
+            for table in document.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        cell_text = cell.text.strip()
+                        if cell_text and cell_text not in parts:
+                            parts.append(cell_text)
+            return "\n".join(parts)
         except Exception as e:
             raise HTTPException(422, _err("parse_failed", lang, detail=str(e)))
 
