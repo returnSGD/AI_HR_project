@@ -30,13 +30,20 @@
 
         <!-- Job preference filters -->
         <div class="filter-row">
+          <!-- Level 1: Province -->
           <div class="filter-chip">
+            <span class="flt-lbl">🗺 {{ t('filter.province') }}</span>
+            <select v-model="filters.province" class="flt-sel">
+              <option value="">{{ t('filter.all') }}</option>
+              <option v-for="p in PROVINCE_LIST" :key="p" :value="p">{{ p }}</option>
+            </select>
+          </div>
+          <!-- Level 2: City — only visible after province selected, hidden for single-city provinces -->
+          <div class="filter-chip" v-if="filters.province && provinceCities.length > 1">
             <span class="flt-lbl">🏙 {{ t('filter.city') }}</span>
             <select v-model="filters.city" class="flt-sel">
-              <option value="">{{ t('filter.all') }}</option>
-              <optgroup v-for="g in CHINA_CITY_GROUPS" :key="g.label" :label="g.label">
-                <option v-for="c in g.cities" :key="c" :value="c">{{ c }}</option>
-              </optgroup>
+              <option value="">{{ t('filter.allCity') }}</option>
+              <option v-for="c in provinceCities" :key="c" :value="c">{{ c }}</option>
             </select>
           </div>
           <div class="filter-chip">
@@ -214,7 +221,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from './i18n.js'
 import { CHINA_CITY_GROUPS } from './cities.js'
@@ -240,12 +247,20 @@ function toggleMode() {
   showProfile.value = false
 }
 
-// CHINA_CITY_GROUPS imported from cities.js
+// Province list and map derived from imported CHINA_CITY_GROUPS
+const PROVINCE_LIST = CHINA_CITY_GROUPS.map(g => g.label)
+const PROVINCE_CITIES = Object.fromEntries(CHINA_CITY_GROUPS.map(g => [g.label, g.cities]))
 
 // ── Seeker state ──────────────────────────────────────────────────────
 const phase      = ref('idle')
 const file       = ref(null)
-const filters    = ref({ city: '', jobType: '' })
+const filters    = ref({ province: '', city: '', jobType: '' })
+
+// Reset city when province changes
+watch(() => filters.value.province, () => { filters.value.city = '' })
+
+// Cities available for selected province
+const provinceCities = computed(() => PROVINCE_CITIES[filters.value.province] || [])
 const expandedId = ref(null)
 const jobs       = ref([])
 const report     = ref('')
@@ -327,7 +342,9 @@ async function run() {
   try {
     const fd = new FormData()
     fd.append('file', file.value)
-    if (filters.value.city) fd.append('preferred_city', filters.value.city)
+    // Only send city when a specific city (not just province) is selected
+    const cityVal = filters.value.city || (provinceCities.value.length === 1 ? provinceCities.value[0] : '')
+    if (cityVal) fd.append('preferred_city', cityVal)
     if (filters.value.jobType) fd.append('preferred_type', filters.value.jobType)
     const resp = await fetch(`${API_BASE}/api/match`, {
       method: 'POST',
@@ -366,6 +383,7 @@ async function run() {
 function reset() {
   phase.value = 'idle'; file.value = null; jobs.value = []
   report.value = ''; err.value = ''; expandedId.value = null
+  filters.value.province = ''; filters.value.city = ''
 }
 
 // ── Recruiter state ───────────────────────────────────────────────────
