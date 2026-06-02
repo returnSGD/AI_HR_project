@@ -58,7 +58,11 @@
 
         <div v-if="jobs.length">
           <div class="slabel">{{ t('section.jobs', { n: jobs.length }) }}</div>
-          <div v-for="(j, i) in jobs" :key="j.id" :class="['job', i === 0 && 'top']">
+          <div
+            v-for="(j, i) in jobs" :key="j.id"
+            :class="['job', i === 0 && 'top']"
+            @click="expandedId = expandedId === j.id ? null : j.id"
+          >
             <div class="job-top">
               <div>
                 <div class="co">{{ j.company }}</div>
@@ -72,6 +76,7 @@
                   target="_blank"
                   rel="noopener noreferrer"
                   class="src-tag src-crawled src-link"
+                  @click.stop
                 >🌐 {{ j.platform || t('source.crawled').replace('🌐 ', '') }}</a>
                 <span
                   v-else-if="j.source_type === 'crawled'"
@@ -85,6 +90,26 @@
               </div>
             </div>
             <div class="tags"><span v-for="tg in j.tags" :key="tg">{{ tg }}</span></div>
+
+            <!-- Expandable JD detail -->
+            <div v-if="expandedId === j.id" class="job-detail">
+              <div class="jd-meta">
+                <span class="jd-meta-item">📍 <strong>{{ j.location || '—' }}</strong></span>
+                <span class="jd-meta-item">💰 <strong>{{ j.salary || '—' }}</strong></span>
+                <span class="jd-meta-item">💼 <strong>{{ j.type || '—' }}</strong></span>
+              </div>
+              <p v-if="j.description" class="jd-desc">{{ j.description }}</p>
+              <a
+                v-if="j.url"
+                :href="j.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="jd-apply"
+                @click.stop
+              >{{ t('job.apply') }} ↗</a>
+            </div>
+
+            <div class="job-expand-hint">{{ expandedId === j.id ? '▲' : '▼' }}</div>
           </div>
         </div>
 
@@ -218,6 +243,7 @@ const CITIES = ['深圳', '北京', '上海', '广州', '杭州', '成都', '宁
 const phase      = ref('idle')
 const file       = ref(null)
 const filters    = ref({ city: '', jobType: '' })
+const expandedId = ref(null)
 const jobs       = ref([])
 const report     = ref('')
 const err        = ref('')
@@ -336,7 +362,7 @@ async function run() {
 
 function reset() {
   phase.value = 'idle'; file.value = null; jobs.value = []
-  report.value = ''; err.value = ''
+  report.value = ''; err.value = ''; expandedId.value = null
 }
 
 // ── Recruiter state ───────────────────────────────────────────────────
@@ -430,8 +456,18 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .bdg { font-size: .68rem; font-weight: 700; background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; padding: 2px 8px; border-radius: 20px; }
 
 /* Job card */
-.job { background: #fff; border: 1px solid var(--g2); border-radius: 14px; padding: 18px; margin-bottom: 12px; }
+.job { background: #fff; border: 1px solid var(--g2); border-radius: 14px; padding: 18px; margin-bottom: 12px; cursor: pointer; position: relative; }
 .job.top { border-top: 3px solid var(--y); }
+.job:hover { border-color: #CBD5E1; }
+.job-expand-hint { position: absolute; bottom: 10px; right: 14px; font-size: .65rem; color: #CBD5E1; }
+.job-detail { border-top: 1px solid var(--g2); margin-top: 12px; padding-top: 12px; animation: jdIn .15s ease; }
+.jd-meta { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; }
+.jd-meta-item { font-size: .8rem; color: var(--g5); }
+.jd-meta-item strong { color: var(--dk); font-weight: 600; }
+.jd-desc { font-size: .83rem; color: #374151; line-height: 1.7; margin: 0 0 10px; }
+.jd-apply { font-size: .78rem; font-weight: 700; color: var(--blue); text-decoration: none; }
+.jd-apply:hover { text-decoration: underline; }
+@keyframes jdIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 .job-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
 .job-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .co { font-size: .78rem; color: var(--g5); }

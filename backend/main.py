@@ -423,29 +423,27 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
         bonus = 8 if job.get("source_type") in ("crawled", "user_posted") else 0
         return min(int(base_score + hit_ratio * 62) + bonus, 98)
 
-    # ── Dim 3: Education tier + breakout ─────────────────────────────
-    skill_weight = 62.0
-    edu_penalty = 0.0
+    # ── Dim 3: Education tier (multiplicative) ───────────────────────
     edu_tier = meta.get("education_tier")
-    # Infer min_tier from job title if not stored on the job dict
     title_low = job.get("title", "").lower()
-    if any(w in title_low for w in ["研究员", "scientist", "principal", "staff"]):
-        min_tier = 2
-    elif any(w in title_low for w in ["实习", "intern", "校招", "junior"]):
-        min_tier = 4
+
+    if any(w in title_low for w in ["研究员", "scientist", "principal", "staff", "专家"]):
+        min_tier = 2                        # top-school roles
+    elif any(w in title_low for w in ["大模型", "llm", "rlhf", "预训练", "量化研究"]):
+        min_tier = 2                        # competitive AI roles
+    elif any(w in title_low for w in ["实习", "intern", "校招", "junior", "graduate", "应届"]):
+        min_tier = 4                        # internships / campus hire
     else:
-        min_tier = 3
+        min_tier = 3                        # standard full-time engineering
+
+    keyword_score = hit_ratio * 62.0
+    raw = float(base_score + keyword_score)
 
     if edu_tier and edu_tier > min_tier:
         tier_gap = edu_tier - min_tier
-        if hit_ratio > 0.35:           # ✦ breakout: strong skills override edu gap
-            skill_weight = 62.0 * 1.5
-            edu_penalty = tier_gap * 3
-        else:
-            edu_penalty = tier_gap * 5
-
-    keyword_score = hit_ratio * skill_weight
-    raw = float(base_score + keyword_score - edu_penalty)
+        # Multiplicative: gap=1 → ×0.40, gap=2 → ×0.16, gap≥3 → ×0.06
+        # No "breakout" — keyword stuffing cannot override education mismatch
+        raw *= (0.40 ** tier_gap)
 
     # ── Dim 1: Academic year + job-type preference filter ────────────
     _title = (job.get("title") or "").lower()
@@ -522,10 +520,13 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
             elif is_senior_role:
                 raw += 6
 
-    # ── Dim 2: City preference bonus ─────────────────────────────────
+    # ── Dim 2: City preference ────────────────────────────────────────
     preferred_city = (meta.get("preferred_city") or "").strip()
-    if preferred_city and preferred_city in (job.get("location") or ""):
-        raw += 15
+    if preferred_city:
+        if preferred_city in (job.get("location") or ""):
+            raw += 22           # explicit city match — strong boost
+        else:
+            raw *= 0.65         # off-city penalty when user stated a preference
 
     # ── Dim 4: Major cross-match ──────────────────────────────────────
     major = meta.get("major_category") or ""
