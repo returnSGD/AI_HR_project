@@ -103,12 +103,20 @@
 
             <!-- Expandable JD detail -->
             <div v-if="expandedId === j.id" class="job-detail">
+              <!-- Meta row: location / salary / type -->
               <div class="jd-meta">
                 <span class="jd-meta-item">📍 <strong>{{ j.location || '—' }}</strong></span>
                 <span class="jd-meta-item">💰 <strong>{{ j.salary || '—' }}</strong></span>
                 <span class="jd-meta-item">💼 <strong>{{ j.type || '—' }}</strong></span>
+                <span v-if="j.created_at" class="jd-meta-item">📅 <strong>{{ j.created_at }}</strong></span>
               </div>
-              <p v-if="j.description" class="jd-desc">{{ j.description }}</p>
+
+              <!-- Full structured JD (lazy-loaded) -->
+              <div v-if="loadingJd[j.id]" class="jd-loading">⏳ {{ t('job.loadingJd') }}</div>
+              <div v-else-if="jobJds[j.id]" class="jd-full rbox" v-html="renderMarkdown(jobJds[j.id])"></div>
+              <!-- Fallback to short description while JD loads or on error -->
+              <p v-else-if="j.description" class="jd-desc">{{ j.description }}</p>
+
               <a
                 v-if="j.url"
                 :href="j.url"
@@ -302,11 +310,29 @@ watch(() => filters.value.province, () => { filters.value.city = '' })
 
 // Cities available for selected province
 const provinceCities = computed(() => PROVINCE_CITIES[filters.value.province] || [])
-const expandedId = ref(null)
-const jobs       = ref([])
-const report     = ref('')
-const err        = ref('')
-const statusText = ref('')
+const expandedId   = ref(null)
+const jobJds       = ref({})   // id → full JD string (cached)
+const loadingJd    = ref({})   // id → boolean
+const jobs         = ref([])
+const report       = ref('')
+const err          = ref('')
+const statusText   = ref('')
+
+// Lazy-load full JD when a card is expanded
+watch(expandedId, async (id) => {
+  if (!id || jobJds.value[id]) return
+  loadingJd.value = { ...loadingJd.value, [id]: true }
+  try {
+    const resp = await fetch(`${API_BASE}/api/jobs/${id}/jd`)
+    if (resp.ok) {
+      const data = await resp.json()
+      jobJds.value = { ...jobJds.value, [id]: data.jd }
+    }
+  } catch (_) { /* silently fall back to short description */ }
+  finally {
+    loadingJd.value = { ...loadingJd.value, [id]: false }
+  }
+})
 
 // Filter out preset jobs when toggle is off
 const displayJobs = computed(() =>
@@ -561,8 +587,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .jd-meta-item { font-size: .8rem; color: var(--g5); }
 .jd-meta-item strong { color: var(--dk); font-weight: 600; }
 .jd-desc { font-size: .83rem; color: #374151; line-height: 1.7; margin: 0 0 10px; }
-.jd-apply { font-size: .78rem; font-weight: 700; color: var(--blue); text-decoration: none; }
+.jd-apply { font-size: .78rem; font-weight: 700; color: var(--blue); text-decoration: none; display: inline-block; margin-top: 6px; }
 .jd-apply:hover { text-decoration: underline; }
+.jd-loading { font-size: .82rem; color: var(--g5); padding: 10px 0; }
+.jd-full { border: none; border-radius: 0; padding: 0; margin: 0; box-shadow: none; }
+.jd-full h2 { font-size: .9rem; margin: 16px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--g2); }
+.jd-full h2:first-child { margin-top: 4px; }
+.jd-full p, .jd-full li { font-size: .83rem; }
 @keyframes jdIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 .job-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
 .job-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }

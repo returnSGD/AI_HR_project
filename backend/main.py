@@ -73,7 +73,7 @@ def _init_db() -> None:
     existing = {row[1] for row in cur.execute("PRAGMA table_info(jobs)").fetchall()}
     for col, dflt in [
         ("source_type", "'preset'"), ("url", "''"), ("platform", "''"),
-        ("created_at", "''"), ("is_active", "1"),
+        ("created_at", "''"), ("is_active", "1"), ("full_jd", "''"),
     ]:
         if col not in existing:
             cur.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT DEFAULT {dflt}")
@@ -1150,3 +1150,89 @@ async def generate_jd(body: GenerateJDRequest):
     resp.raise_for_status()
     jd = resp.json()["choices"][0]["message"]["content"].strip()
     return {"jd": jd}
+
+
+# ── Per-job full JD (lazy generation + DB cache) ───────────────────────
+
+_FULL_JD_SYSTEM = """\
+You are a senior HR professional at a top-tier tech company.
+Generate a complete, professional job description in Chinese.
+Output ONLY Markdown with EXACTLY these four section headers (no extras):
+
+## 岗位描述
+[2-3 sentence overview, then numbered list of 5-6 concrete responsibilities]
+
+## 岗位要求
+必须具备的：
+[numbered list of 3-5 hard requirements matching the job's tech stack]
+
+有一定了解的：
+[numbered list of 2-3 nice-to-have skills]
+
+## 加分项或注意事项
+[numbered list of 2-3 bonus items or important notes for candidates]
+
+## 参加面试的城市
+[city extracted from the job's location field, plus "远程面试" if applicable]
+
+Be specific and realistic. Do NOT output job title or company header."""
+
+
+async def _generate_full_jd(job: dict) -> str:
+    tags = ", ".join(job.get("tags") or [])
+    kws  = ", ".join(job.get("keywords") or [])
+    user_msg = (
+        f"职位: {job['title']}  公司: {job['company']}\n"
+        f"地点: {job.get('location', '')}  类型: {job.get('type', '')}  薪资: {job.get('salary', '')}\n"
+        f"技能标签: {tags}\n关键词: {kws}\n"
+        f"简要职责: {job.get('description', '')}\n\n"
+        "请生成完整专业JD。"
+    )
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.post(
+            f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {LLM_API_KEY.strip()}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": LLM_MODEL,
+                "messages": [
+                    {"role": "system", "content": _FULL_JD_SYSTEM},
+                    {"role": "user",   "content": user_msg},
+                ],
+                "max_tokens": 900,
+                "temperature": 0.55,
+            },
+        )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"].strip()
+
+
+@app.get("/api/jobs/{job_id}/jd")
+async def get_job_full_jd(job_id: int):
+    """Return cached full JD or generate+cache it on first access."""
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    row = con.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(404, "Job not found")
+
+    job = dict(row)
+    job["tags"]     = json.loads(job.get("tags")     or "[]")
+    job["keywords"] = json.loads(job.get("keywords") or "[]")
+
+    cached = (job.get("full_jd") or "").strip()
+    if cached:
+        return {"jd": cached, "cached": True}
+
+    jd = await _generate_full_jd(job)
+
+    # Persist so subsequent requests are instant
+    con2 = sqlite3.connect(DB_PATH)
+    con2.execute("UPDATE jobs SET full_jd = ? WHERE id = ?", (jd, job_id))
+    con2.commit()
+    con2.close()
+
+    return {"jd": jd, "cached": False}
