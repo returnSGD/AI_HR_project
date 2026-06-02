@@ -69,14 +69,14 @@ def _init_db() -> None:
             platform    TEXT DEFAULT ''
         )
     """)
-    # Migrate existing DBs that lack the new columns (idempotent)
+    # Migrate existing DBs that lack columns (idempotent)
     existing = {row[1] for row in cur.execute("PRAGMA table_info(jobs)").fetchall()}
-    if "source_type" not in existing:
-        cur.execute("ALTER TABLE jobs ADD COLUMN source_type TEXT DEFAULT 'preset'")
-    if "url" not in existing:
-        cur.execute("ALTER TABLE jobs ADD COLUMN url TEXT DEFAULT ''")
-    if "platform" not in existing:
-        cur.execute("ALTER TABLE jobs ADD COLUMN platform TEXT DEFAULT ''")
+    for col, dflt in [
+        ("source_type", "'preset'"), ("url", "''"), ("platform", "''"),
+        ("created_at", "''"), ("is_active", "1"),
+    ]:
+        if col not in existing:
+            cur.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT DEFAULT {dflt}")
     con.commit()
     cur.executemany(
         "INSERT OR IGNORE INTO jobs "
@@ -101,11 +101,13 @@ def _init_db() -> None:
 
 
 def _upsert_jobs(jobs: list[dict]) -> None:
+    today = datetime.now().strftime("%Y-%m-%d")
     con = sqlite3.connect(DB_PATH)
     con.executemany(
         "INSERT OR REPLACE INTO jobs "
-        "(id,company,title,location,salary,type,tags,description,keywords,source_type,url,platform) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "(id,company,title,location,salary,type,tags,description,keywords,"
+        "source_type,url,platform,created_at,is_active) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
             (
                 j["id"], j["company"], j["title"], j.get("location", ""),
@@ -116,6 +118,8 @@ def _upsert_jobs(jobs: list[dict]) -> None:
                 j.get("source_type", "crawled"),
                 j.get("url", ""),
                 j.get("platform", ""),
+                j.get("created_at", today),
+                j.get("is_active", 1),
             )
             for j in jobs
         ],
@@ -127,17 +131,19 @@ def _upsert_jobs(jobs: list[dict]) -> None:
 def _load_all_jobs() -> list[dict]:
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
-    rows = con.execute("SELECT * FROM jobs").fetchall()
+    rows = con.execute("SELECT * FROM jobs WHERE is_active = 1").fetchall()
     con.close()
     result = []
     for row in rows:
         j = dict(row)
-        j["tags"] = json.loads(j["tags"] or "[]")
+        j["tags"]     = json.loads(j["tags"]     or "[]")
         j["keywords"] = json.loads(j["keywords"] or "[]")
-        j["color"] = COMPANY_COLORS.get(j["company"], "#6B7280")
+        j["color"]    = COMPANY_COLORS.get(j["company"], "#6B7280")
         j.setdefault("source_type", "preset")
-        j.setdefault("url", "")
-        j.setdefault("platform", "")
+        j.setdefault("url",        "")
+        j.setdefault("platform",   "")
+        j.setdefault("created_at", "")
+        j.setdefault("is_active",  1)
         result.append(j)
     return result
 
@@ -430,13 +436,13 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
     title_low = job.get("title", "").lower()
 
     if any(w in title_low for w in ["研究员", "scientist", "principal", "staff", "专家"]):
-        min_tier = 2                        # top-school roles
+        min_tier = 2                        # research / senior roles
     elif any(w in title_low for w in ["大模型", "llm", "rlhf", "预训练", "量化研究"]):
         min_tier = 2                        # competitive AI roles
-    elif any(w in title_low for w in ["实习", "intern", "校招", "junior", "graduate", "应届"]):
-        min_tier = 4                        # internships / campus hire
+    elif any(w in title_low for w in ["实习", "intern"]):
+        min_tier = 4                        # internships: open to 专科
     else:
-        min_tier = 3                        # standard full-time engineering
+        min_tier = 3                        # 校招 / 社招 / regular dev: 本科 minimum
 
     keyword_score = hit_ratio * 62.0
     raw = float(base_score + keyword_score)
@@ -1056,28 +1062,46 @@ class JobPostRequest(BaseModel):
 
 @app.post("/api/jobs", status_code=201)
 async def post_job(body: JobPostRequest):
+    today = datetime.now().strftime("%Y-%m-%d")
     con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
-    # Use a high-range ID to avoid conflicts with seed (1-100) and crawler (3000+)
     max_id = cur.execute(
         "SELECT COALESCE(MAX(id),9000) FROM jobs WHERE id >= 9000"
     ).fetchone()[0]
     new_id = max_id + 1
     cur.execute(
         "INSERT INTO jobs "
-        "(id,company,title,location,salary,type,tags,description,keywords,source_type,url) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "(id,company,title,location,salary,type,tags,description,keywords,"
+        "source_type,url,created_at,is_active) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             new_id, body.company, body.title, body.location, body.salary, body.type,
             json.dumps(body.tags, ensure_ascii=False),
             body.description,
             json.dumps(body.keywords, ensure_ascii=False),
-            "user_posted", body.url,
+            "user_posted", body.url, today, 1,
         ),
     )
     con.commit()
     con.close()
-    return {"id": new_id, "status": "published"}
+    return {
+        "id": new_id, "status": "published",
+        "company": body.company, "title": body.title,
+        "location": body.location or "", "salary": body.salary or "",
+        "type": body.type or "社招",
+        "tags": body.tags or [], "created_at": today, "is_active": 1,
+        "source_type": "user_posted",
+    }
+
+
+@app.patch("/api/jobs/{job_id}", status_code=200)
+async def set_job_active(job_id: int, is_active: int = 1):
+    """Set is_active=0 to close a job (filled), is_active=1 to reopen."""
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE jobs SET is_active = ? WHERE id = ?", (is_active, job_id))
+    con.commit()
+    con.close()
+    return {"id": job_id, "is_active": is_active}
 
 
 # ── AI JD generation ──────────────────────────────────────────────────

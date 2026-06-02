@@ -66,9 +66,9 @@
         <div v-if="phase === 'loading'" class="status">⏳ {{ statusText }}</div>
 
         <div v-if="jobs.length">
-          <div class="slabel">{{ t('section.jobs', { n: jobs.length }) }}</div>
+          <div class="slabel">{{ t('section.jobs', { n: displayJobs.length }) }}</div>
           <div
-            v-for="(j, i) in jobs" :key="j.id"
+            v-for="(j, i) in displayJobs" :key="j.id"
             :class="['job', i === 0 && 'top']"
             @click="expandedId = expandedId === j.id ? null : j.id"
           >
@@ -99,6 +99,7 @@
               </div>
             </div>
             <div class="tags"><span v-for="tg in j.tags" :key="tg">{{ tg }}</span></div>
+            <div v-if="j.created_at" class="job-date">{{ t('job.posted') }} {{ j.created_at }}</div>
 
             <!-- Expandable JD detail -->
             <div v-if="expandedId === j.id" class="job-detail">
@@ -211,6 +212,39 @@
             <option value="en" :selected="locale === 'en'">English</option>
           </select>
         </div>
+
+        <!-- Preset visibility toggle -->
+        <div class="divider" />
+        <div class="prow">
+          <span>{{ t('profile.showPreset') }}</span>
+          <button class="tog" :class="{ 'tog-on': showPreset }" @click="togglePreset">
+            <span class="tog-thumb" />
+          </button>
+        </div>
+
+        <!-- Recruiter: my posted jobs -->
+        <template v-if="mode === 'recruiter' && myPostedJobs.length">
+          <div class="divider" />
+          <div class="about-title">{{ t('profile.myJobs') }}</div>
+          <div v-for="pj in myPostedJobs" :key="pj.id" class="my-job-row">
+            <div class="my-job-info">
+              <span class="my-job-title">{{ pj.title }}</span>
+              <span :class="['my-job-status', pj.is_active ? 'status-active' : 'status-closed']">
+                {{ pj.is_active ? t('profile.jobActive') : t('profile.jobClosed') }}
+              </span>
+            </div>
+            <div class="my-job-meta">{{ pj.company }} · {{ pj.created_at || '' }}</div>
+            <div class="my-job-actions">
+              <button v-if="pj.is_active" class="btn-sm btn-close" @click="closeJob(pj.id)">
+                {{ t('profile.closeJob') }}
+              </button>
+              <button v-else class="btn-sm btn-reopen" @click="reopenJob(pj.id)">
+                {{ t('profile.reopenJob') }}
+              </button>
+            </div>
+          </div>
+        </template>
+
         <div class="divider" />
         <div class="about-title">{{ t('profile.about') }}</div>
         <div class="about-desc">{{ t('profile.aboutDesc') }}</div>
@@ -248,8 +282,15 @@ function toggleMode() {
 }
 
 // Province list and map derived from imported CHINA_CITY_GROUPS
-const PROVINCE_LIST = CHINA_CITY_GROUPS.map(g => g.label)
+const PROVINCE_LIST   = CHINA_CITY_GROUPS.map(g => g.label)
 const PROVINCE_CITIES = Object.fromEntries(CHINA_CITY_GROUPS.map(g => [g.label, g.cities]))
+
+// ── Preset-visibility setting ─────────────────────────────────────────
+const showPreset = ref(localStorage.getItem('oc_show_preset') !== 'false')
+function togglePreset() {
+  showPreset.value = !showPreset.value
+  localStorage.setItem('oc_show_preset', showPreset.value)
+}
 
 // ── Seeker state ──────────────────────────────────────────────────────
 const phase      = ref('idle')
@@ -266,6 +307,11 @@ const jobs       = ref([])
 const report     = ref('')
 const err        = ref('')
 const statusText = ref('')
+
+// Filter out preset jobs when toggle is off
+const displayJobs = computed(() =>
+  showPreset.value ? jobs.value : jobs.value.filter(j => j.source_type !== 'preset')
+)
 
 const reportHtml = computed(() => renderMarkdown(report.value))
 
@@ -390,6 +436,8 @@ function reset() {
 const jd = ref({ company: '', title: '', salary: '', location: '', tagsRaw: '', description: '' })
 const aiLoading  = ref(false)
 const publishing = ref(false)
+// Track posted jobs (full objects) in localStorage
+const myPostedJobs = ref(JSON.parse(localStorage.getItem('oc_my_jobs') || '[]'))
 
 async function aiPolish() {
   if (!jd.value.description.trim()) return
@@ -425,6 +473,10 @@ async function publish() {
       body: JSON.stringify({ ...jd.value, tags, keywords: tags.map(t => t.toLowerCase()) }),
     })
     if (!resp.ok) throw new Error('HTTP ' + resp.status)
+    const data = await resp.json()
+    // Save full job object for recruiter management panel
+    myPostedJobs.value = [data, ...myPostedJobs.value]
+    localStorage.setItem('oc_my_jobs', JSON.stringify(myPostedJobs.value))
     jd.value = { company: '', title: '', salary: '', location: '', tagsRaw: '', description: '' }
     showToast(t('recruiter.toast'))
   } catch (e) {
@@ -432,6 +484,28 @@ async function publish() {
   } finally {
     publishing.value = false
   }
+}
+
+async function closeJob(jobId) {
+  try {
+    await fetch(`${API_BASE}/api/jobs/${jobId}?is_active=0`, { method: 'PATCH' })
+    myPostedJobs.value = myPostedJobs.value.map(j =>
+      j.id === jobId ? { ...j, is_active: 0 } : j
+    )
+    localStorage.setItem('oc_my_jobs', JSON.stringify(myPostedJobs.value))
+    showToast(t('recruiter.closedToast'))
+  } catch (e) { err.value = e.message || t('error.api') }
+}
+
+async function reopenJob(jobId) {
+  try {
+    await fetch(`${API_BASE}/api/jobs/${jobId}?is_active=1`, { method: 'PATCH' })
+    myPostedJobs.value = myPostedJobs.value.map(j =>
+      j.id === jobId ? { ...j, is_active: 1 } : j
+    )
+    localStorage.setItem('oc_my_jobs', JSON.stringify(myPostedJobs.value))
+    showToast(t('recruiter.reopenedToast'))
+  } catch (e) { err.value = e.message || t('error.api') }
 }
 </script>
 
@@ -481,6 +555,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .job.top { border-top: 3px solid var(--y); }
 .job:hover { border-color: #CBD5E1; }
 .job-expand-hint { position: absolute; bottom: 10px; right: 14px; font-size: .65rem; color: #CBD5E1; }
+.job-date { font-size: .72rem; color: #94A3B8; margin-top: 6px; }
 .job-detail { border-top: 1px solid var(--g2); margin-top: 12px; padding-top: 12px; animation: jdIn .15s ease; }
 .jd-meta { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; }
 .jd-meta-item { font-size: .8rem; color: var(--g5); }
@@ -566,4 +641,20 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .slide-enter-from, .slide-leave-to { opacity: 0; }
 
 .footer { text-align: center; color: #94A3B8; font-size: .78rem; margin-top: 48px; }
+
+/* My posted jobs in profile panel */
+.my-job-row { padding: 10px 0; border-bottom: 1px solid var(--g2); }
+.my-job-row:last-child { border-bottom: none; }
+.my-job-info { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.my-job-title { font-size: .84rem; font-weight: 600; flex: 1; }
+.my-job-status { font-size: .68rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+.status-active { background: #ECFDF5; color: var(--green); }
+.status-closed { background: #F1F5F9; color: var(--g5); }
+.my-job-meta { font-size: .75rem; color: var(--g5); margin-bottom: 6px; }
+.my-job-actions { display: flex; gap: 6px; }
+.btn-sm { border: none; border-radius: 6px; padding: 4px 10px; font-size: .75rem; font-weight: 600; cursor: pointer; }
+.btn-close { background: #FEF2F2; color: #DC2626; }
+.btn-close:hover { background: #FEE2E2; }
+.btn-reopen { background: #F0FDF4; color: #16A34A; }
+.btn-reopen:hover { background: #DCFCE7; }
 </style>

@@ -11,7 +11,7 @@ const messages = {
     upload: { drag: '拖拽或点击上传简历文件', pick: '支持 PDF / Word / Excel / 图片 / TXT / MD' },
     btn: { run: '✨ 分析我的简历', new: '↺ 新的分析', again: '↺ 分析其他简历' },
     status: { read: '正在读取您的简历…', match: '正在与职位数据库匹配…' },
-    job: { match: '匹配度', apply: '查看原帖' },
+    job: { match: '匹配度', apply: '查看原帖', posted: '发布于' },
     section: { jobs: '📊 找到前 {n} 个匹配职位', report: '🤖 AI 诊断报告', generating: '生成中…', complete: '完成 ✓' },
     error: { pdf: '请选择 PDF 文件。', fileType: '不支持的文件格式，请上传 PDF、Word、Excel、图片、TXT 或 MD 文件。', api: '发生意外错误，请稍后重试。' },
     source: { preset: '📦 预设', crawled: '🌐 真实抓取', user_posted: '🏢 企业直招' },
@@ -36,7 +36,11 @@ const messages = {
       title: '个人主页', guest: '访客用户', guestSub: '求职者',
       settings: '设置', langLabel: '界面语言', about: '关于应用',
       aboutDesc: 'Offer-Catcher 是一款 AI 驱动的职位智能匹配工具，帮助求职者精准定位最适合的职位，并提供个性化的简历优化建议。',
-      version: '版本 1.0.0 Beta', applyNote: '语言设置将在下次分析时生效'
+      version: '版本 1.0.0 Beta', applyNote: '语言设置将在下次分析时生效',
+      showPreset: '显示预设职位',
+      myJobs: '我发布的岗位', jobActive: '招聘中', jobClosed: '已关闭',
+      closeJob: '标记已招到', reopenJob: '重新开放',
+      closedToast: '岗位已关闭 ✓', reopenedToast: '岗位已重新开放 ✓',
     }
   },
   en: {
@@ -49,7 +53,7 @@ const messages = {
     upload: { drag: 'Drop or click to upload your resume', pick: 'PDF / Word / Excel / Image / TXT / MD supported' },
     btn: { run: '✨ Analyze My Resume', new: '↺ New Analysis', again: '↺ Analyze Another Resume' },
     status: { read: 'Reading your resume…', match: 'Matching against job database…' },
-    job: { match: 'Match', apply: 'View Job' },
+    job: { match: 'Match', apply: 'View Job', posted: 'Posted' },
     section: { jobs: '📊 Top {n} Matches Found', report: '🤖 AI Diagnostic Report', generating: 'Generating…', complete: 'Complete ✓' },
     error: { pdf: 'Please select a PDF file.', fileType: 'Unsupported format. Please upload PDF, Word, Excel, image, TXT, or MD.', api: 'An unexpected error occurred. Please try again.' },
     source: { preset: '📦 Preset', crawled: '🌐 Live', user_posted: '🏢 Direct' },
@@ -74,7 +78,11 @@ const messages = {
       title: 'My Profile', guest: 'Guest User', guestSub: 'Job Seeker',
       settings: 'Settings', langLabel: 'Interface Language', about: 'About',
       aboutDesc: 'Offer-Catcher is an AI-powered job matching tool that helps job seekers find the best-fit positions and receive personalized resume optimization advice.',
-      version: 'Version 1.0.0 Beta', applyNote: 'Language changes apply to the next analysis'
+      version: 'Version 1.0.0 Beta', applyNote: 'Language changes apply to the next analysis',
+      showPreset: 'Show preset jobs',
+      myJobs: 'My Job Posts', jobActive: 'Active', jobClosed: 'Closed',
+      closeJob: 'Mark as Filled', reopenJob: 'Reopen',
+      closedToast: 'Job closed ✓', reopenedToast: 'Job reopened ✓',
     }
   }
 }
