@@ -66,7 +66,10 @@
         <div v-if="phase === 'loading'" class="status">⏳ {{ statusText }}</div>
 
         <div v-if="jobs.length">
-          <div class="slabel">{{ t('section.jobs', { n: displayJobs.length }) }}</div>
+          <div class="slabel">
+            {{ t('section.jobs', { n: displayJobs.length }) }}
+            <span v-if="liveCount > 0" class="live-badge">🌐 {{ liveCount }} {{ t('section.liveJobs') }}</span>
+          </div>
           <div
             v-for="(j, i) in displayJobs" :key="j.id"
             :class="['job', i === 0 && 'top']"
@@ -311,6 +314,7 @@ watch(() => filters.value.province, () => { filters.value.city = '' })
 // Cities available for selected province
 const provinceCities = computed(() => PROVINCE_CITIES[filters.value.province] || [])
 const expandedId   = ref(null)
+const liveCount    = ref(0)
 const jobJds       = ref({})   // id → full JD string (cached)
 const loadingJd    = ref({})   // id → boolean
 const jobs         = ref([])
@@ -439,7 +443,12 @@ async function run() {
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue
         const obj = JSON.parse(line.slice(6))
-        if (obj.type === 'jobs') { jobs.value = obj.jobs; phase.value = 'streaming' }
+        if (obj.type === 'status') { statusText.value = obj.text }
+        else if (obj.type === 'jobs') {
+          jobs.value = obj.jobs
+          liveCount.value = obj.live_count || 0
+          phase.value = 'streaming'
+        }
         else if (obj.type === 'chunk') { report.value += obj.text }
         else if (obj.type === 'error') { throw new Error(obj.message) }
         else if (obj.type === 'done') { phase.value = 'done' }
@@ -455,6 +464,7 @@ async function run() {
 function reset() {
   phase.value = 'idle'; file.value = null; jobs.value = []
   report.value = ''; err.value = ''; expandedId.value = null
+  liveCount.value = 0
   filters.value.province = ''; filters.value.city = ''
 }
 
@@ -573,7 +583,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .btn-g { background: #fff; border: 1px solid var(--g2); border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; }
 .status { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 12px 18px; color: #78350F; margin-bottom: 20px; }
 .err { background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 14px 18px; color: #991B1B; margin-bottom: 20px; }
-.slabel { font-weight: 700; margin: 22px 0 14px; display: flex; align-items: center; gap: 8px; }
+.slabel { font-weight: 700; margin: 22px 0 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.live-badge { font-size: .68rem; font-weight: 700; background: #EFF6FF; border: 1px solid #BFDBFE; color: var(--blue); padding: 2px 9px; border-radius: 20px; }
 .bdg { font-size: .68rem; font-weight: 700; background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; padding: 2px 8px; border-radius: 20px; }
 
 /* Job card */

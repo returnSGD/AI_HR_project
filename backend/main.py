@@ -1026,27 +1026,41 @@ async def match_resume(
     if not _looks_like_resume(resume_text):
         raise HTTPException(status_code=422, detail=_err("not_resume", lang))
 
-    # ── 6. Parallel: LLM metadata extraction + resume-targeted live crawl ──
-    meta, live_jobs = await asyncio.gather(
-        extract_resume_metadata(resume_text),
-        fetch_jobs_for_resume(resume_text, preferred_type.strip()),
+    # ── 6. Kick off background tasks (do NOT await yet — stream starts first) ──
+    meta_task  = asyncio.create_task(extract_resume_metadata(resume_text))
+    crawl_task = asyncio.create_task(
+        fetch_jobs_for_resume(resume_text, preferred_type.strip())
     )
-    # User-supplied preferences take priority over LLM-extracted values
-    if preferred_city.strip():
-        meta["preferred_city"] = preferred_city.strip()
-    pt = preferred_type.strip()
-    if pt and pt != "不限":
-        meta["preferred_type"] = pt
-    matched = get_top_jobs(resume_text, meta=meta, extra_jobs=live_jobs)
+
+    # Capture form-field locals for use inside the generator closure
+    _pref_city = preferred_city.strip()
+    _pref_type = preferred_type.strip()
 
     async def event_stream():
-        yield f"data: {json.dumps({'type': 'jobs', 'jobs': matched})}\n\n"
+        # ── Immediate status: tell user we are hitting Tencent Careers ────
+        queries      = _resume_to_queries(resume_text, _pref_type)
+        crawl_notice = "🌐 正在从腾讯招聘获取实时岗位（关键词：" + "、".join(queries) + "）…"
+        yield "data: " + json.dumps({"type": "status", "text": crawl_notice}) + "\n\n"
+
+        # ── Wait for both tasks ────────────────────────────────────────────
+        meta, live_jobs = await asyncio.gather(meta_task, crawl_task)
+
+        # User-supplied preferences override LLM-extracted values
+        if _pref_city:
+            meta["preferred_city"] = _pref_city
+        if _pref_type and _pref_type != "不限":
+            meta["preferred_type"] = _pref_type
+
+        matched    = get_top_jobs(resume_text, meta=meta, extra_jobs=live_jobs)
+        live_count = sum(1 for j in matched if j.get("source_type") == "crawled")
+
+        yield f"data: {json.dumps({'type':'jobs','jobs':matched,'live_count':live_count})}\n\n"
         try:
             async for chunk in stream_llm_report(resume_text, matched, lang):
-                yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
+                yield f"data: {json.dumps({'type':'chunk','text':chunk})}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            yield f"data: {json.dumps({'type':'error','message':str(e)})}\n\n"
+        yield f"data: {json.dumps({'type':'done'})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
