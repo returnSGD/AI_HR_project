@@ -34,7 +34,9 @@
             <span class="flt-lbl">🏙 {{ t('filter.city') }}</span>
             <select v-model="filters.city" class="flt-sel">
               <option value="">{{ t('filter.all') }}</option>
-              <option v-for="c in CITIES" :key="c" :value="c">{{ c }}</option>
+              <optgroup v-for="g in CHINA_CITY_GROUPS" :key="g.label" :label="g.label">
+                <option v-for="c in g.cities" :key="c" :value="c">{{ c }}</option>
+              </optgroup>
             </select>
           </div>
           <div class="filter-chip">
@@ -215,6 +217,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from './i18n.js'
+import { CHINA_CITY_GROUPS } from './cities.js'
 
 const API_BASE = 'https://offer-catcher-api.onrender.com'
 const { t, locale } = useI18n()
@@ -237,7 +240,7 @@ function toggleMode() {
   showProfile.value = false
 }
 
-const CITIES = ['深圳', '北京', '上海', '广州', '杭州', '成都', '宁德', '西安']
+// CHINA_CITY_GROUPS imported from cities.js
 
 // ── Seeker state ──────────────────────────────────────────────────────
 const phase      = ref('idle')

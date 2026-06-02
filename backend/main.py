@@ -416,7 +416,9 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
             hits += 0.4
 
     kw_count = max(len(job["keywords"]), 1)
-    hit_ratio = hits / kw_count
+    # Cap denominator at 10: jobs with 15 keywords aren't unfairly penalised
+    # vs jobs with 5 — 5 correct skill hits always means ≥50% relevance.
+    hit_ratio = min(hits / min(kw_count, 10), 1.0)
 
     if meta is None:
         # Legacy path — pure keyword scoring, no metadata
