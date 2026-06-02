@@ -84,12 +84,17 @@ def _init_db() -> None:
         "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         [
             (
-                j["id"], j["company"], j["title"], j["location"],
-                j["salary"], j["type"],
-                json.dumps(j["tags"], ensure_ascii=False),
-                j["description"],
-                json.dumps(j["keywords"], ensure_ascii=False),
-                "preset", "",
+                j["id"],
+                j.get("company", ""),
+                j.get("title", ""),
+                j.get("location", ""),
+                j.get("salary", "竞争性薪酬"),
+                j.get("type", "实习"),
+                json.dumps(j.get("tags", []), ensure_ascii=False),
+                j.get("description", ""),
+                json.dumps(j.get("keywords", []), ensure_ascii=False),
+                j.get("source_type", "preset"),
+                j.get("url", ""),
             )
             for j in _SEED_JOBS
         ],
