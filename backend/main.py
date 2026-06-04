@@ -99,9 +99,21 @@ def _init_db() -> None:
             for j in _SEED_JOBS
         ],
     )
+    # Sync pre-generated full_jd into DB for any seed job that has it
+    jd_updates = [
+        (j["full_jd"], j["id"])
+        for j in _SEED_JOBS
+        if (j.get("full_jd") or "").strip()
+    ]
+    if jd_updates:
+        cur.executemany(
+            "UPDATE jobs SET full_jd = ? WHERE id = ?",
+            jd_updates,
+        )
     con.commit()
     count = cur.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-    print(f"[offer-catcher] jobs.db: {count} total records ({len(_SEED_JOBS)} preset entries synced).")
+    jd_count = len(jd_updates)
+    print(f"[offer-catcher] jobs.db: {count} records synced, {jd_count} with pre-generated JD.")
     con.close()
 
 
@@ -1241,12 +1253,14 @@ async def get_job_full_jd(job_id: int):
     if cached:
         return {"jd": cached, "cached": True}
 
-    jd = await _generate_full_jd(job)
+    # Preset jobs must have JDs pre-generated via generate_jds.py — don't fabricate on-the-fly
+    if job.get("source_type") == "preset":
+        return {"jd": "", "cached": False}
 
-    # Persist so subsequent requests are instant
+    # For crawled / user_posted jobs: generate on-demand and cache
+    jd = await _generate_full_jd(job)
     con2 = sqlite3.connect(DB_PATH)
     con2.execute("UPDATE jobs SET full_jd = ? WHERE id = ?", (jd, job_id))
     con2.commit()
     con2.close()
-
     return {"jd": jd, "cached": False}
