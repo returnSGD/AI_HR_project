@@ -133,6 +133,7 @@
               <a v-if="j.url" :href="j.url" target="_blank" rel="noopener noreferrer" class="jd-apply" @click.stop>{{ t('job.apply') }} ↗</a>
 
               <!-- Optimize button + streaming result -->
+              <!-- Resume optimize button -->
               <button
                 v-if="file"
                 class="opt-btn"
@@ -140,6 +141,15 @@
                 @click.stop="optimizeForJob(j)"
               >{{ optimizing[j.id] ? t('job.optimizing') : t('job.optimizeBtn') }}</button>
               <div v-if="optimizeResult[j.id]" class="opt-result rbox" v-html="renderMarkdown(optimizeResult[j.id])"></div>
+
+              <!-- HR perspective simulation button -->
+              <button
+                v-if="file"
+                class="hr-btn"
+                :disabled="!!hrViewing[j.id]"
+                @click.stop="hrViewResume(j)"
+              >{{ hrViewing[j.id] ? t('job.hrViewing') : t('job.hrBtn') }}</button>
+              <div v-if="hrResult[j.id]" class="hr-result" v-html="renderMarkdown(hrResult[j.id])"></div>
             </div>
 
             <div class="job-expand-hint">{{ expandedId === j.id ? '▲' : '▼' }}</div>
@@ -327,8 +337,10 @@ watch(() => filters.value.province, () => { filters.value.city = '' })
 const provinceCities = computed(() => PROVINCE_CITIES[filters.value.province] || [])
 const expandedId    = ref(null)
 const liveCount     = ref(0)
-const optimizing    = ref({})   // job.id → true while streaming
-const optimizeResult = ref({})  // job.id → markdown text
+const optimizing     = ref({})
+const optimizeResult = ref({})
+const hrViewing      = ref({})
+const hrResult       = ref({})
 const jobJds       = ref({})   // id → full JD string (cached)
 const loadingJd    = ref({})   // id → boolean
 const jobs         = ref([])
@@ -480,8 +492,39 @@ async function run() {
 function reset() {
   phase.value = 'idle'; file.value = null; jobs.value = []
   report.value = ''; err.value = ''; expandedId.value = null
-  liveCount.value = 0; optimizing.value = {}; optimizeResult.value = {}
+  liveCount.value = 0
+  optimizing.value = {}; optimizeResult.value = {}
+  hrViewing.value = {}; hrResult.value = {}
   filters.value.province = ''; filters.value.city = ''
+}
+
+async function hrViewResume(job) {
+  if (!file.value) return
+  hrViewing.value  = { ...hrViewing.value,  [job.id]: true }
+  hrResult.value   = { ...hrResult.value,   [job.id]: '' }
+  try {
+    const fd = new FormData()
+    fd.append('file', file.value)
+    const resp = await fetch(`${API_BASE}/api/jobs/${job.id}/hr-view`, {
+      method: 'POST',
+      headers: { 'Accept-Language': locale.value === 'zh' ? 'zh-CN' : 'en-US' },
+      body: fd,
+    })
+    if (!resp.ok) throw new Error('HTTP ' + resp.status)
+    const reader = resp.body.getReader()
+    const dec    = new TextDecoder()
+    let   text   = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      text += dec.decode(value, { stream: true })
+      hrResult.value = { ...hrResult.value, [job.id]: text }
+    }
+  } catch (e) {
+    hrResult.value = { ...hrResult.value, [job.id]: `> ❌ ${e.message}` }
+  } finally {
+    hrViewing.value = { ...hrViewing.value, [job.id]: false }
+  }
 }
 
 async function optimizeForJob(job) {
@@ -659,6 +702,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .opt-btn:hover:not([disabled]) { opacity: .8; }
 .opt-btn[disabled] { opacity: .5; cursor: not-allowed; }
 .opt-result { margin-top: 12px; }
+.hr-btn  { margin-top: 10px; background: #7C3AED; color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-size: .82rem; font-weight: 700; cursor: pointer; transition: opacity .15s; display: block; }
+.hr-btn:hover:not([disabled]) { opacity: .8; }
+.hr-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.hr-result { margin-top: 12px; background: #FAF5FF; border: 1px solid #DDD6FE; border-radius: 12px; padding: 18px; line-height: 1.8; }
+.hr-result h2 { font-size: .9rem; margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #EDE9FE; }
+.hr-result h2:first-child { margin-top: 0; }
+.hr-result blockquote { border-left: 3px solid #7C3AED; margin: 6px 0; padding: 4px 12px; background: #EDE9FE; border-radius: 0 6px 6px 0; font-style: italic; font-size: .84rem; }
+.hr-result ul { padding-left: 20px; }
+.hr-result p, .hr-result li { font-size: .84rem; }
 .jd-loading { font-size: .82rem; color: var(--g5); padding: 10px 0; }
 .jd-full { border: none; border-radius: 0; padding: 0; margin: 0; box-shadow: none; }
 .jd-full h2 { font-size: .9rem; margin: 16px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--g2); }

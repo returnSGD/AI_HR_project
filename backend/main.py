@@ -1430,3 +1430,97 @@ async def optimize_resume_for_job(
                         continue
 
     return StreamingResponse(stream_optimize(), media_type="text/plain; charset=utf-8")
+
+
+# ── HR perspective simulation (streaming inner monologue) ─────────────
+
+_HR_SYSTEM = """\
+你是一位在腾讯/字节跳动/阿里等大厂从事校招工作5年的资深HR，负责初筛简历。
+现在你正在为某个具体岗位快速筛简历，时间很紧，每份简历只看30-60秒。
+
+请以真实的「内心独白」形式，边阅读候选人简历边输出你真实的想法。
+
+格式规则（必须严格遵守）：
+- 用「**【读到…】**」标注正在看的部分（如：**【读到教育背景】**）
+- 每个部分给出2-4句真实内心活动，要有主观判断、甚至偏见
+- 语气要真实、口语化、有点主观，反映HR真正的筛选逻辑
+- 不要客气，不要写「这位候选人」——你是在心里自言自语
+- 最后给出【10秒决策】，用以下固定格式：
+
+**【10秒决策时刻】**
+「（内心最终判断的一两句话）」
+
+**📋 初筛结论**
+- **决策**：[直接进面试 / 进笔试候选池 / 暂缓 / 淘汰]
+- **最大亮点**：[一句话]
+- **最大顾虑**：[一句话]
+- **最让我停顿的一句简历原文**：「[引用原文]」——[你的真实反应]
+- **如果ta要逆转这个结论，最有效的一步**：[一句话具体建议]
+"""
+
+
+@app.post("/api/jobs/{job_id}/hr-view")
+async def hr_view_resume(
+    job_id: int,
+    file: UploadFile = File(...),
+    accept_language: str = Header(default="zh-CN"),
+):
+    """Stream an HR recruiter's inner monologue while reading the resume for a specific job."""
+    lang = "zh" if accept_language.lower().startswith("zh") else "en"
+
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    row = con.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(404, "Job not found")
+    job = dict(row)
+    job["tags"]     = json.loads(job.get("tags")     or "[]")
+    job["keywords"] = json.loads(job.get("keywords") or "[]")
+
+    raw = await file.read()
+    resume_text = extract_text(raw, file.content_type or "", file.filename or "", lang)
+
+    user_msg = (
+        f"你正在为以下岗位筛简历：\n"
+        f"公司: {job['company']}  |  职位: {job['title']}\n"
+        f"核心要求关键词: {', '.join(job.get('keywords', [])[:10])}\n\n"
+        f"候选人简历：\n<resume>\n{resume_text[:MAX_CHARS]}\n</resume>\n\n"
+        "开始以你的真实内心独白阅读这份简历，给出初筛判断。"
+    )
+
+    async def stream_hr():
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream(
+                "POST",
+                f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {LLM_API_KEY.strip()}",
+                    "Content-Type":  "application/json",
+                },
+                json={
+                    "model":    LLM_MODEL,
+                    "stream":   True,
+                    "messages": [
+                        {"role": "system", "content": _HR_SYSTEM},
+                        {"role": "user",   "content": user_msg},
+                    ],
+                    "max_tokens":  1200,
+                    "temperature": 0.85,
+                },
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    chunk = line[6:].strip()
+                    if chunk == "[DONE]":
+                        break
+                    try:
+                        content = json.loads(chunk)["choices"][0]["delta"].get("content")
+                        if content:
+                            yield content
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
+
+    return StreamingResponse(stream_hr(), media_type="text/plain; charset=utf-8")
