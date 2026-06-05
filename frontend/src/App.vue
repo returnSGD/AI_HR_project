@@ -70,6 +70,7 @@
             {{ t('section.jobs', { n: displayJobs.length }) }}
             <span v-if="liveCount > 0" class="live-badge">🌐 {{ liveCount }} {{ t('section.liveJobs') }}</span>
           </div>
+          <div class="match-note">ℹ️ {{ t('section.matchNote') }}</div>
           <div
             v-for="(j, i) in displayJobs" :key="j.id"
             :class="['job', i === 0 && 'top']"
@@ -98,7 +99,7 @@
                   v-else
                   :class="['src-tag', `src-${j.source_type || 'preset'}`]"
                 >{{ t(`source.${j.source_type || 'preset'}`) }}</span>
-                <div class="score">{{ j.score }}%<span>{{ t('job.match') }}</span></div>
+                <div class="score" :title="t('job.matchTip')">{{ j.score }}%<span>{{ t('job.match') }} ℹ️</span></div>
               </div>
             </div>
             <div class="tags"><span v-for="tg in j.tags" :key="tg">{{ tg }}</span></div>
@@ -625,7 +626,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .btn-g { background: #fff; border: 1px solid var(--g2); border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; }
 .status { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 12px 18px; color: #78350F; margin-bottom: 20px; }
 .err { background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 14px 18px; color: #991B1B; margin-bottom: 20px; }
-.slabel { font-weight: 700; margin: 22px 0 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.slabel { font-weight: 700; margin: 22px 0 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.match-note { font-size: .74rem; color: #94A3B8; margin-bottom: 14px; }
 .live-badge { font-size: .68rem; font-weight: 700; background: #EFF6FF; border: 1px solid #BFDBFE; color: var(--blue); padding: 2px 9px; border-radius: 20px; }
 .bdg { font-size: .68rem; font-weight: 700; background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; padding: 2px 8px; border-radius: 20px; }
 
