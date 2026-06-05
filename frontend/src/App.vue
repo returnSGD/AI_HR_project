@@ -391,8 +391,10 @@ function renderMarkdown(md) {
     }
     if (tbuf.length) flushTable()
     if (!t) { if (ul) { html += '</ul>'; ul = false } continue }
-    if (t.startsWith('## ')) { if (ul) { html += '</ul>'; ul = false } html += '<h2>' + inl(t.slice(3)) + '</h2>'; continue }
-    if (t.startsWith('- ')) { if (!ul) { html += '<ul>'; ul = true } html += '<li>' + inl(t.slice(2)) + '</li>'; continue }
+    if (t.startsWith('### ')) { if (ul) { html += '</ul>'; ul = false } html += '<h3>' + inl(t.slice(4)) + '</h3>'; continue }
+    if (t.startsWith('## '))  { if (ul) { html += '</ul>'; ul = false } html += '<h2>' + inl(t.slice(3)) + '</h2>'; continue }
+    if (t.startsWith('> '))   { if (ul) { html += '</ul>'; ul = false } html += '<blockquote>' + inl(t.slice(2)) + '</blockquote>'; continue }
+    if (t.startsWith('- '))   { if (!ul) { html += '<ul>'; ul = true } html += '<li>' + inl(t.slice(2)) + '</li>'; continue }
     const m = t.match(/^(\d+)\.\s(.*)/)
     if (m) { if (ul) { html += '</ul>'; ul = false } html += '<p><strong>' + m[1] + '.</strong> ' + inl(m[2]) + '</p>'; continue }
     if (ul) { html += '</ul>'; ul = false }
@@ -661,7 +663,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .jd-full { border: none; border-radius: 0; padding: 0; margin: 0; box-shadow: none; }
 .jd-full h2 { font-size: .9rem; margin: 16px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--g2); }
 .jd-full h2:first-child { margin-top: 4px; }
+.jd-full h3 { font-size: .86rem; margin: 12px 0 4px; color: var(--dk); }
 .jd-full p, .jd-full li { font-size: .83rem; }
+.rbox h3 { font-size: .86rem; margin: 10px 0 4px; }
+.rbox blockquote { border-left: 3px solid var(--y); margin: 6px 0; padding: 4px 12px; background: #FFFBEB; border-radius: 0 6px 6px 0; font-size: .83rem; }
+.opt-result h3 { font-size: .86rem; font-weight: 700; margin: 10px 0 4px; }
+.opt-result blockquote { border-left: 3px solid var(--y); margin: 6px 0; padding: 4px 12px; background: #FFFBEB; border-radius: 0 6px 6px 0; font-size: .83rem; }
 @keyframes jdIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 .job-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
 .job-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
