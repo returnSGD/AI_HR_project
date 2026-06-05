@@ -568,6 +568,21 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
     return min(max(int(raw), 5), 98)
 
 
+def skill_gap(tokens: list[str], job: dict) -> tuple[list[str], list[str]]:
+    """Return (matched_keywords, missing_keywords) for a job vs resume tokens."""
+    ts = set(tokens)
+    matched: list[str] = []
+    missing: list[str] = []
+    for kw in (job.get("keywords") or []):
+        kw_low = kw.lower()
+        parts  = kw_low.split()
+        hit = (len(parts) == 1 and kw_low in ts) or (
+            len(parts) > 1 and all(p in ts for p in parts)
+        ) or any(kw_low in t or t in kw_low for t in ts)
+        (matched if hit else missing).append(kw)
+    return matched, missing
+
+
 _STUDENT_TEXT_SIGNALS = re.compile(
     r'在读|应届|实习生|大[一二三四]|研[一二三]|研究生一|master student|undergraduate|'
     r'expected.*graduation|预计.*毕业|毕业时间.*202[5-9]',
@@ -622,6 +637,12 @@ def get_top_jobs(
     # If we don't have enough diverse jobs, append the overflow to fill up to n
     if len(results) < n:
         results.extend(overflow[: n - len(results)])
+
+    # Attach per-job skill gap for frontend display and report generation
+    for job in results:
+        m, miss = skill_gap(tokens, job)
+        job["matched_kws"] = m
+        job["missing_kws"]  = miss
 
     return results
 
@@ -880,15 +901,38 @@ def build_prompt(resume_text: str, jobs: list[dict], lang: str) -> str:
     instr = LANG_INSTRUCTION.get(lang, LANG_INSTRUCTION["zh"])
     safe_resume = resume_text[:MAX_CHARS]
 
+    def _gap_line_zh(j: dict) -> str:
+        m = "、".join((j.get("matched_kws") or [])[:6])
+        miss = "、".join((j.get("missing_kws") or [])[:6])
+        return (
+            f"✅ 简历已具备: {m or '—'}\n"
+            f"❌ 简历欠缺: {miss or '—'}"
+        )
+
+    def _gap_line_en(j: dict) -> str:
+        m = ", ".join((j.get("matched_kws") or [])[:6])
+        miss = ", ".join((j.get("missing_kws") or [])[:6])
+        return f"✅ Matched: {m or '—'} | ❌ Missing: {miss or '—'}"
+
     if lang == "zh":
         job_list = "\n\n".join(
             f"岗位{i+1}: {j['title']} — {j['company']} (匹配度: {j['score']}%)\n"
-            f"技能标签: {', '.join(j['tags'])}\n岗位描述: {j['description']}"
+            f"技能标签: {', '.join(j.get('tags', []))}\n"
+            + _gap_line_zh(j) + f"\n岗位描述: {j.get('description', '')}"
             for i, j in enumerate(jobs)
         )
-        coach_intro = "你是一位拥有深厚大厂招聘经验的顶级职业顾问。请分析沙盒中的简历与下方匹配岗位，输出「简历-岗位匹配诊断与优化报告」。"
-        positions_header = "=== 匹配岗位 ==="
-        headers_instruction = "请严格使用以下章节标题撰写报告（优化路线图需给出5条具体可执行建议，按序号列出）："
+        coach_intro = (
+            "你是一位拥有深厚大厂招聘经验的顶级职业顾问。"
+            "请基于下方每个岗位的「✅已具备/❌欠缺」技能数据，"
+            "结合沙盒中的简历，输出「简历-岗位匹配诊断与优化报告」。"
+            "优化路线图必须针对具体缺失技能给出可落地的改写建议。"
+        )
+        positions_header = "=== 匹配岗位（含技能差距） ==="
+        headers_instruction = (
+            "请严格使用以下章节标题撰写报告。"
+            "「优化路线图」必须逐条引用上方缺失技能，"
+            "给出「简历第X部分 → 具体改写示例」格式的5条建议："
+        )
         section_headers = (
             "## 🎯 执行摘要\n"
             "## 💪 核心优势\n"
@@ -896,18 +940,25 @@ def build_prompt(resume_text: str, jobs: list[dict], lang: str) -> str:
             "## 🚀 优化路线图\n"
             "## ⭐ 最佳岗位推荐"
         )
-        closing = "结合简历实际内容，诚恳中肯，约400-600字。"
+        closing = "结合简历实际内容与技能差距数据，诚恳中肯，约400-600字。"
     else:
         job_list = "\n\n".join(
             f"Position {i+1}: {j['title']} at {j['company']} (Match: {j['score']}%)\n"
-            f"Skills: {', '.join(j['tags'])}\nRole: {j['description']}"
+            f"Skills: {', '.join(j.get('tags', []))}\n"
+            + _gap_line_en(j) + f"\nRole: {j.get('description', '')}"
             for i, j in enumerate(jobs)
         )
-        coach_intro = ('You are a world-class career coach with deep Big Tech hiring expertise. '
-                       'Analyze the resume inside the sandbox tags and the matched positions below, '
-                       'then write a "Resume-to-Job Matching Diagnosis & Optimization Report."')
-        positions_header = "=== TOP POSITIONS ==="
-        headers_instruction = "Write the report using these exact section headers (Optimization Roadmap: 5 numbered, concrete steps):"
+        coach_intro = (
+            "You are a world-class career coach. Using the ✅ Matched / ❌ Missing skill data "
+            "for each job, analyze the resume inside the sandbox tags and write a concrete "
+            "Resume-to-Job Matching Diagnosis & Optimization Report. "
+            "The Optimization Roadmap MUST reference specific missing skills with rewrite examples."
+        )
+        positions_header = "=== TOP POSITIONS (with skill gaps) ==="
+        headers_instruction = (
+            "Write the report using these exact section headers. "
+            "Optimization Roadmap must cite missing skills and show BEFORE/AFTER resume rewrites:"
+        )
         section_headers = (
             "## 🎯 Executive Summary\n"
             "## 💪 Key Strengths Identified\n"
@@ -915,7 +966,7 @@ def build_prompt(resume_text: str, jobs: list[dict], lang: str) -> str:
             "## 🚀 Optimization Roadmap\n"
             "## ⭐ Best-Fit Role Recommendation"
         )
-        closing = "Reference actual resume content, be encouraging but honest, ~400-600 words."
+        closing = "Reference actual resume text and skill gap data. Be honest and specific, ~400-600 words."
 
     # DEFENCE 1: truncate to MAX_CHARS to prevent DoS via oversized payloads.
     # DEFENCE 2: sandbox the resume inside a clearly-named XML danger tag so the
@@ -1264,3 +1315,99 @@ async def get_job_full_jd(job_id: int):
     con2.commit()
     con2.close()
     return {"jd": jd, "cached": False}
+
+
+# ── Resume-to-job specific optimization (streaming) ───────────────────
+
+_OPTIMIZE_SYSTEM = """\
+你是一位专注于中国大厂招聘的专业简历教练。
+给定一份学生简历和一个具体岗位的JD，你的任务是：
+生成针对该岗位的、高度具体的、可直接落地的简历优化建议，帮助候选人提升初筛通过率。
+
+要求：
+1. 逐条引用简历中的原文，给出「改前 → 改后」对比示例
+2. 重点补充JD要求但简历缺失的技能关键词
+3. 建议必须可操作，不能泛泛而谈
+4. 预估优化后的通过率变化
+
+输出格式（Markdown）：
+## 🎯 核心差距（最重要的3项缺失）
+## ✏️ 简历改写建议（逐条，含改前/改后对比）
+## 📈 预计提升效果
+"""
+
+
+@app.post("/api/jobs/{job_id}/optimize")
+async def optimize_resume_for_job(
+    job_id: int,
+    file: UploadFile = File(...),
+    accept_language: str = Header(default="zh-CN"),
+):
+    """Stream job-specific resume optimization suggestions."""
+    lang = "zh" if accept_language.lower().startswith("zh") else "en"
+
+    # Load job
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    row = con.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(404, "Job not found")
+    job = dict(row)
+    job["tags"]     = json.loads(job.get("tags")     or "[]")
+    job["keywords"] = json.loads(job.get("keywords") or "[]")
+
+    # Extract resume text
+    raw = await file.read()
+    resume_text = extract_text(raw, file.content_type or "", file.filename or "", lang)
+    safe_resume = resume_text[:MAX_CHARS]
+
+    jd_text = (job.get("full_jd") or "").strip() or (
+        f"职位: {job['title']}\n技能要求: {', '.join(job.get('keywords', []))}"
+    )
+
+    user_msg = (
+        f"【目标岗位】\n"
+        f"公司: {job['company']}  职位: {job['title']}\n"
+        f"类型: {job.get('type','')}  地点: {job.get('location','')}\n"
+        f"关键词: {', '.join(job.get('keywords', []))}\n\n"
+        f"【岗位JD】\n{jd_text[:1500]}\n\n"
+        f"【候选人简历】\n<resume>\n{safe_resume}\n</resume>\n\n"
+        "请给出针对该岗位的具体简历优化建议，帮助候选人提升初筛通过率。"
+    )
+
+    async def stream_optimize():
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream(
+                "POST",
+                f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {LLM_API_KEY.strip()}",
+                    "Content-Type":  "application/json",
+                },
+                json={
+                    "model":    LLM_MODEL,
+                    "stream":   True,
+                    "messages": [
+                        {"role": "system", "content": _OPTIMIZE_SYSTEM},
+                        {"role": "user",   "content": user_msg},
+                    ],
+                    "max_tokens":  1500,
+                    "temperature": 0.6,
+                },
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    chunk = line[6:].strip()
+                    if chunk == "[DONE]":
+                        break
+                    try:
+                        content = json.loads(chunk)["choices"][0]["delta"].get("content")
+                        if content:
+                            yield content
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
+
+    return StreamingResponse(stream_optimize(), media_type="text/plain; charset=utf-8")

@@ -106,7 +106,7 @@
 
             <!-- Expandable JD detail -->
             <div v-if="expandedId === j.id" class="job-detail">
-              <!-- Meta row: location / salary / type -->
+              <!-- Meta row -->
               <div class="jd-meta">
                 <span class="jd-meta-item">📍 <strong>{{ j.location || '—' }}</strong></span>
                 <span class="jd-meta-item">💰 <strong>{{ j.salary || '—' }}</strong></span>
@@ -114,20 +114,31 @@
                 <span v-if="j.created_at" class="jd-meta-item">📅 <strong>{{ j.created_at }}</strong></span>
               </div>
 
-              <!-- Full structured JD (lazy-loaded) -->
+              <!-- Skill gap visualization -->
+              <div v-if="j.matched_kws?.length" class="gap-row">
+                <span class="gap-label gap-match">✅ {{ t('job.matchedSkills') }}</span>
+                <span v-for="kw in j.matched_kws.slice(0,7)" :key="kw" class="kw-chip kw-match">{{ kw }}</span>
+              </div>
+              <div v-if="j.missing_kws?.length" class="gap-row">
+                <span class="gap-label gap-miss">❌ {{ t('job.missingSkills') }}</span>
+                <span v-for="kw in j.missing_kws.slice(0,7)" :key="kw" class="kw-chip kw-miss">{{ kw }}</span>
+              </div>
+
+              <!-- Full JD -->
               <div v-if="loadingJd[j.id]" class="jd-loading">⏳ {{ t('job.loadingJd') }}</div>
               <div v-else-if="jobJds[j.id]" class="jd-full rbox" v-html="renderMarkdown(jobJds[j.id])"></div>
-              <!-- Fallback to short description while JD loads or on error -->
               <p v-else-if="j.description" class="jd-desc">{{ j.description }}</p>
 
-              <a
-                v-if="j.url"
-                :href="j.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="jd-apply"
-                @click.stop
-              >{{ t('job.apply') }} ↗</a>
+              <a v-if="j.url" :href="j.url" target="_blank" rel="noopener noreferrer" class="jd-apply" @click.stop>{{ t('job.apply') }} ↗</a>
+
+              <!-- Optimize button + streaming result -->
+              <button
+                v-if="file"
+                class="opt-btn"
+                :disabled="!!optimizing[j.id]"
+                @click.stop="optimizeForJob(j)"
+              >{{ optimizing[j.id] ? t('job.optimizing') : t('job.optimizeBtn') }}</button>
+              <div v-if="optimizeResult[j.id]" class="opt-result rbox" v-html="renderMarkdown(optimizeResult[j.id])"></div>
             </div>
 
             <div class="job-expand-hint">{{ expandedId === j.id ? '▲' : '▼' }}</div>
@@ -313,8 +324,10 @@ watch(() => filters.value.province, () => { filters.value.city = '' })
 
 // Cities available for selected province
 const provinceCities = computed(() => PROVINCE_CITIES[filters.value.province] || [])
-const expandedId   = ref(null)
-const liveCount    = ref(0)
+const expandedId    = ref(null)
+const liveCount     = ref(0)
+const optimizing    = ref({})   // job.id → true while streaming
+const optimizeResult = ref({})  // job.id → markdown text
 const jobJds       = ref({})   // id → full JD string (cached)
 const loadingJd    = ref({})   // id → boolean
 const jobs         = ref([])
@@ -464,8 +477,37 @@ async function run() {
 function reset() {
   phase.value = 'idle'; file.value = null; jobs.value = []
   report.value = ''; err.value = ''; expandedId.value = null
-  liveCount.value = 0
+  liveCount.value = 0; optimizing.value = {}; optimizeResult.value = {}
   filters.value.province = ''; filters.value.city = ''
+}
+
+async function optimizeForJob(job) {
+  if (!file.value) return
+  optimizing.value  = { ...optimizing.value,    [job.id]: true  }
+  optimizeResult.value = { ...optimizeResult.value, [job.id]: ''  }
+  try {
+    const fd = new FormData()
+    fd.append('file', file.value)
+    const resp = await fetch(`${API_BASE}/api/jobs/${job.id}/optimize`, {
+      method: 'POST',
+      headers: { 'Accept-Language': locale.value === 'zh' ? 'zh-CN' : 'en-US' },
+      body: fd,
+    })
+    if (!resp.ok) throw new Error('HTTP ' + resp.status)
+    const reader = resp.body.getReader()
+    const dec    = new TextDecoder()
+    let   text   = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      text += dec.decode(value, { stream: true })
+      optimizeResult.value = { ...optimizeResult.value, [job.id]: text }
+    }
+  } catch (e) {
+    optimizeResult.value = { ...optimizeResult.value, [job.id]: `> ❌ ${e.message}` }
+  } finally {
+    optimizing.value = { ...optimizing.value, [job.id]: false }
+  }
 }
 
 // ── Recruiter state ───────────────────────────────────────────────────
@@ -600,6 +642,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .jd-desc { font-size: .83rem; color: #374151; line-height: 1.7; margin: 0 0 10px; }
 .jd-apply { font-size: .78rem; font-weight: 700; color: var(--blue); text-decoration: none; display: inline-block; margin-top: 6px; }
 .jd-apply:hover { text-decoration: underline; }
+/* Skill gap */
+.gap-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; align-items: center; }
+.gap-label { font-size: .7rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.gap-match { color: #059669; background: #ECFDF5; }
+.gap-miss  { color: #DC2626; background: #FEF2F2; }
+.kw-chip   { font-size: .7rem; padding: 2px 8px; border-radius: 10px; }
+.kw-match  { background: #D1FAE5; color: #065F46; }
+.kw-miss   { background: #FEE2E2; color: #991B1B; }
+/* Optimize button */
+.opt-btn  { margin-top: 12px; background: var(--dk); color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-size: .82rem; font-weight: 700; cursor: pointer; transition: opacity .15s; display: block; }
+.opt-btn:hover:not([disabled]) { opacity: .8; }
+.opt-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.opt-result { margin-top: 12px; }
 .jd-loading { font-size: .82rem; color: var(--g5); padding: 10px 0; }
 .jd-full { border: none; border-radius: 0; padding: 0; margin: 0; box-shadow: none; }
 .jd-full h2 { font-size: .9rem; margin: 16px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--g2); }
