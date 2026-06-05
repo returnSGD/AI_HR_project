@@ -930,8 +930,10 @@ def build_prompt(resume_text: str, jobs: list[dict], lang: str) -> str:
         positions_header = "=== 匹配岗位（含技能差距） ==="
         headers_instruction = (
             "请严格使用以下章节标题撰写报告。"
-            "「优化路线图」必须逐条引用上方缺失技能，"
-            "给出「简历第X部分 → 具体改写示例」格式的5条建议："
+            "「优化路线图」必须：①逐条引用上方缺失技能；"
+            "②先识别简历的真实章节名（项目经历/实习经历/技能特长等），"
+            "然后以「在"[真实章节名]"中补充/改写…」的格式给出5条可落地建议，"
+            "禁止使用「简历第X部分」这类占位符："
         )
         section_headers = (
             "## 🎯 执行摘要\n"
@@ -957,7 +959,10 @@ def build_prompt(resume_text: str, jobs: list[dict], lang: str) -> str:
         positions_header = "=== TOP POSITIONS (with skill gaps) ==="
         headers_instruction = (
             "Write the report using these exact section headers. "
-            "Optimization Roadmap must cite missing skills and show BEFORE/AFTER resume rewrites:"
+            "Optimization Roadmap: first identify the actual section names in the resume "
+            "(e.g. 'Project Experience', 'Internship', 'Skills'), then give 5 concrete suggestions "
+            "in the format 'In [actual section name]: change X to Y'. "
+            "Never use placeholder phrases like 'Section X of the resume':"
         )
         section_headers = (
             "## 🎯 Executive Summary\n"
@@ -1321,18 +1326,19 @@ async def get_job_full_jd(job_id: int):
 
 _OPTIMIZE_SYSTEM = """\
 你是一位专注于中国大厂招聘的专业简历教练。
-给定一份学生简历和一个具体岗位的JD，你的任务是：
-生成针对该岗位的、高度具体的、可直接落地的简历优化建议，帮助候选人提升初筛通过率。
+给定一份学生简历和一个具体岗位的JD，生成高度具体、可直接落地的简历优化建议。
 
-要求：
-1. 逐条引用简历中的原文，给出「改前 → 改后」对比示例
-2. 重点补充JD要求但简历缺失的技能关键词
-3. 建议必须可操作，不能泛泛而谈
-4. 预估优化后的通过率变化
+关键规则：
+1. 先阅读简历，识别其真实章节名称（如"项目经历""实习经历""校园经历""技能特长"等）
+2. 在改写建议中必须引用真实章节名，例如「在"项目经历·XX项目"中补充…」
+   绝对禁止使用「简历第X部分」这类无意义的占位符
+3. 引用简历原文，给出「改前 → 改后」完整对比，改后内容要包含目标岗的关键词
+4. 每条建议聚焦一个缺失技能点，不要泛泛而谈
+5. 预估优化前后初筛通过率的变化
 
 输出格式（Markdown）：
 ## 🎯 核心差距（最重要的3项缺失）
-## ✏️ 简历改写建议（逐条，含改前/改后对比）
+## ✏️ 简历改写建议（逐条，注明具体章节，含改前→改后对比）
 ## 📈 预计提升效果
 """
 
