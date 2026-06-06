@@ -746,8 +746,8 @@ ERRORS: dict[str, dict[str, str]] = {
         "en": "Could not extract meaningful text (fewer than 50 characters). For scanned files, ensure Tesseract OCR is installed.",
     },
     "no_tesseract": {
-        "zh": "服务器未安装 Tesseract OCR 引擎，无法处理纯图片型文件。请上传文字版 PDF 或 Word 文档。",
-        "en": "Tesseract OCR is not installed on the server. Please upload a text-based PDF or Word document.",
+        "zh": "暂不支持纯图片格式的简历识别，请改用文字版 PDF 或 Word (.docx) 文档上传。",
+        "en": "Image-only resumes are not supported. Please upload a text-based PDF or Word (.docx) document instead.",
     },
 }
 
