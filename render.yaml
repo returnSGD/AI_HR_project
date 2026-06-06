@@ -12,8 +12,19 @@ services:
       # sync: false = 值不写入代码仓库，必须在 Render 控制台手动填写
       - key: LLM_API_KEY
         sync: false
-      # 以下两项非敏感，直接写入配置
+      # 以下几项非敏感，直接写入配置
       - key: LLM_BASE_URL
         value: https://api.deepseek.com/v1
       - key: LLM_MODEL
         value: deepseek-chat
+      # Vision model for image (JPG/PNG) OCR — must support multimodal input.
+      # deepseek-chat is text-only; set VISION_MODEL to a vision-capable model,
+      # e.g. gpt-4o-mini (OpenAI) or claude-haiku (Anthropic).
+      # Leave empty to fall back to Tesseract (requires system install).
+      - key: VISION_MODEL
+        value: ""
+      # Override only if vision model uses a different API key / base URL:
+      # - key: VISION_API_KEY
+      #   sync: false
+      # - key: VISION_BASE_URL
+      #   value: https://api.openai.com/v1

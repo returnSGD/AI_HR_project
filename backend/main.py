@@ -24,9 +24,14 @@ from fastapi.responses import StreamingResponse
 load_dotenv()
 
 # ── Config ───────────────────────────────────────────────────────────
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_API_KEY  = os.getenv("LLM_API_KEY", "")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1")
-LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-chat")
+LLM_MODEL    = os.getenv("LLM_MODEL", "deepseek-chat")
+# Vision model for image OCR — must support multimodal input (e.g. gpt-4o-mini, claude-haiku).
+# Falls back to Tesseract if not set. Uses same API key/base URL unless VISION_* overrides given.
+VISION_MODEL    = os.getenv("VISION_MODEL", "")
+VISION_API_KEY  = os.getenv("VISION_API_KEY", "")
+VISION_BASE_URL = os.getenv("VISION_BASE_URL", "")
 MAX_CHARS = 3000
 DB_PATH = os.path.join(os.path.dirname(__file__), "jobs.db")
 
@@ -759,7 +764,36 @@ def _ocr_image(image: "Image.Image") -> str:
     return pytesseract.image_to_string(image, lang="eng+chi_sim")
 
 
-def extract_text(data: bytes, content_type: str, filename: str, lang: str) -> str:
+async def _ocr_via_vision_llm(data: bytes, img_mime: str, lang: str) -> str:
+    """Send image bytes to a vision-capable LLM and return extracted text."""
+    import base64
+    b64 = base64.b64encode(data).decode()
+    api_key  = (VISION_API_KEY  or LLM_API_KEY).strip()
+    base_url = (VISION_BASE_URL or LLM_BASE_URL).rstrip("/")
+    model    = VISION_MODEL
+    prompt = (
+        "请将这张图片中的所有文字完整转录出来，保持原有排版结构。只输出文字内容，不要添加任何说明。"
+        if lang == "zh" else
+        "Transcribe every piece of text in this image, preserving its layout. Output text only, no explanations."
+    )
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{img_mime};base64,{b64}"}},
+                    {"type": "text", "text": prompt},
+                ]}],
+                "max_tokens": 3000,
+            },
+        )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+async def extract_text(data: bytes, content_type: str, filename: str, lang: str) -> str:
     """
     Dispatch to the right extractor based on MIME type / filename extension.
     Raises HTTPException (with i18n message) on any unrecoverable error.
@@ -794,15 +828,21 @@ def extract_text(data: bytes, content_type: str, filename: str, lang: str) -> st
         if len(text.strip()) >= 50:
             return text
 
-        # Text layer too thin — try OCR page-by-page.
+        # Text layer too thin — try OCR page-by-page (run in executor to not block).
         try:
-            pages_text = []
+            import asyncio
             doc2 = fitz.open(stream=data, filetype="pdf")
-            for page in doc2:
-                pix = page.get_pixmap(dpi=200)
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                pages_text.append(_ocr_image(img))
-            return "\n".join(pages_text)
+            loop = asyncio.get_event_loop()
+
+            def _ocr_all_pages():
+                parts = []
+                for page in doc2:
+                    pix = page.get_pixmap(dpi=200)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    parts.append(_ocr_image(img))
+                return "\n".join(parts)
+
+            return await loop.run_in_executor(None, _ocr_all_pages)
         except ImportError:
             raise HTTPException(503, _err("no_tesseract", lang))
         except Exception as e:
@@ -831,10 +871,23 @@ def extract_text(data: bytes, content_type: str, filename: str, lang: str) -> st
 
     # ── Image (JPG / PNG) ─────────────────────────────────────────────
     if is_img:
+        # Normalise MIME type for the base64 data URL
+        _mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
+        img_mime = content_type if content_type.startswith("image/") else _mime_map.get(ext, "image/jpeg")
+
+        # Primary: vision-capable LLM (requires VISION_MODEL env var)
+        if VISION_MODEL:
+            try:
+                return await _ocr_via_vision_llm(data, img_mime, lang)
+            except Exception:
+                pass  # fall through to Tesseract
+
+        # Fallback: Tesseract (run in thread to avoid blocking the event loop)
         try:
-            import io
+            import io, asyncio
             img = Image.open(io.BytesIO(data))
-            return _ocr_image(img)
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, _ocr_image, img)
         except ImportError:
             raise HTTPException(503, _err("no_tesseract", lang))
         except Exception as e:
@@ -1084,7 +1137,7 @@ async def match_resume(
         raise HTTPException(status_code=413, detail=_err("too_large", lang))
 
     # ── 3. Extract text (multi-format + OCR fallback) ────────────────
-    resume_text = extract_text(raw, file.content_type or "", filename, lang)
+    resume_text = await extract_text(raw, file.content_type or "", filename, lang)
 
     # ── 4. Content guard ─────────────────────────────────────────────
     if len(resume_text.strip()) < 50:
@@ -1378,7 +1431,7 @@ async def optimize_resume_for_job(
 
     # Extract resume text
     raw = await file.read()
-    resume_text = extract_text(raw, file.content_type or "", file.filename or "", lang)
+    resume_text = await extract_text(raw, file.content_type or "", file.filename or "", lang)
     safe_resume = resume_text[:MAX_CHARS]
 
     jd_text = (job.get("full_jd") or "").strip() or (
@@ -1479,7 +1532,7 @@ async def hr_view_resume(
     job["keywords"] = json.loads(job.get("keywords") or "[]")
 
     raw = await file.read()
-    resume_text = extract_text(raw, file.content_type or "", file.filename or "", lang)
+    resume_text = await extract_text(raw, file.content_type or "", file.filename or "", lang)
 
     user_msg = (
         f"你正在为以下岗位筛简历：\n"
