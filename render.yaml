@@ -3,7 +3,7 @@ services:
     name: offer-catcher-api
     runtime: python
     rootDir: backend
-    buildCommand: apt-get install -y tesseract-ocr tesseract-ocr-chi-sim libgl1-mesa-glx 2>/dev/null || true && pip install -r requirements.txt
+    buildCommand: apt-get update -y && apt-get install -y tesseract-ocr tesseract-ocr-chi-sim && pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     plan: free
     region: singapore          # 亚太区，中国访问延迟相对最低
