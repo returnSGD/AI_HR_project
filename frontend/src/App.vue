@@ -177,6 +177,11 @@
       </template>
     </template>
 
+    <!-- ── JD MATCH MODE ─────────────────────────────────────── -->
+    <template v-else-if="mode === 'jdmatch'">
+      <JdMatch />
+    </template>
+
     <!-- ── RECRUITER MODE ───────────────────────────────────── -->
     <template v-else>
       <h2 class="rec-title">{{ t('recruiter.title') }}</h2>
@@ -255,6 +260,17 @@
           </select>
         </div>
 
+        <!-- JD 精准匹配入口 -->
+        <div class="divider" />
+        <button class="jdm-entry" :class="{ active: mode === 'jdmatch' }" @click="switchTo('jdmatch')">
+          <span class="jdm-entry-ico">🔍</span>
+          <div class="jdm-entry-text">
+            <span class="jdm-entry-title">{{ t('profile.jdmatch') }}</span>
+            <span class="jdm-entry-desc">{{ t('profile.jdmatchDesc') }}</span>
+          </div>
+          <span class="jdm-entry-arr">→</span>
+        </button>
+
         <!-- Preset visibility toggle -->
         <div class="divider" />
         <div class="prow">
@@ -303,6 +319,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LandingPage from './components/LandingPage.vue'
+import JdMatch from './components/JdMatch.vue'
 import { setLocale } from './i18n.js'
 import { CHINA_CITY_GROUPS } from './cities.js'
 
@@ -318,7 +335,7 @@ function launchApp() {
 }
 
 // ── Global state ──────────────────────────────────────────────────────
-const mode        = ref(localStorage.getItem('oc_mode') || 'seeker') // 'seeker' | 'recruiter'
+const mode        = ref(localStorage.getItem('oc_mode') || 'seeker') // 'seeker' | 'recruiter' | 'jdmatch'
 const showProfile = ref(false)
 const toast       = ref('')
 let   toastTimer  = null
@@ -332,6 +349,12 @@ function showToast(msg) {
 function toggleMode() {
   mode.value = mode.value === 'seeker' ? 'recruiter' : 'seeker'
   localStorage.setItem('oc_mode', mode.value)
+  showProfile.value = false
+}
+
+function switchTo(m) {
+  mode.value = m
+  localStorage.setItem('oc_mode', m)
   showProfile.value = false
 }
 
@@ -902,6 +925,23 @@ body {
 .btn-sm:hover { opacity: .8; transform: scale(1.05); }
 .btn-close { background: rgba(220,38,38,.08); color: #DC2626; }
 .btn-reopen { background: rgba(22,163,74,.08); color: #16A34A; }
+
+/* ─── JD Match 入口按钮 ──────────────────────────────────── */
+.jdm-entry {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 12px 14px;
+  background: var(--g1); border: 1.5px solid var(--g2);
+  border-radius: 14px; cursor: pointer;
+  transition: all .35s var(--ease); text-align: left;
+}
+.jdm-entry:hover { background: var(--y-soft); border-color: rgba(245,166,35,.35); transform: translateX(2px); }
+.jdm-entry.active { background: var(--y-soft); border-color: rgba(245,166,35,.4); }
+.jdm-entry-ico { font-size: 1.1rem; flex-shrink: 0; }
+.jdm-entry-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.jdm-entry-title { font-size: .86rem; font-weight: 700; color: var(--dk); }
+.jdm-entry-desc { font-size: .72rem; color: var(--g5); line-height: 1.4; }
+.jdm-entry-arr { font-size: .8rem; color: var(--g5); transition: transform .3s var(--ease); }
+.jdm-entry:hover .jdm-entry-arr { transform: translateX(4px); color: var(--dk); }
 
 /* ─── Keyframes ──────────────────────────────────────────────────── */
 @keyframes fadeUp  { from { opacity:0; transform:translateY(32px); } to { opacity:1; transform:translateY(0); } }

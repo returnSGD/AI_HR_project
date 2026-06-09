@@ -1260,6 +1260,125 @@ _JD_SYSTEM = (
 )
 
 
+@app.post("/api/analyze-jd")
+async def analyze_jd(
+    file: UploadFile = File(...),
+    jd_text: str = Form(...),
+    accept_language: str = Header(default="zh-CN"),
+):
+    """Deep match analysis between a user-supplied JD text and an uploaded resume."""
+    lang = "zh" if accept_language.lower().startswith("zh") else "en"
+
+    if not jd_text.strip():
+        raise HTTPException(400, "jd_text is required")
+
+    raw = await file.read()
+    if len(raw) > 10 * 1024 * 1024:
+        raise HTTPException(413, _err("too_large", lang))
+
+    resume_text = await extract_text(raw, file.content_type or "", file.filename or "", lang)
+    if len(resume_text.strip()) < 50:
+        raise HTTPException(422, _err("empty_content", lang))
+
+    safe_resume = resume_text[:MAX_CHARS]
+    safe_jd     = jd_text.strip()[:3000]
+
+    if lang == "zh":
+        prompt = f"""你是一位专业的职业顾问，请对以下简历与职位描述进行深度匹配分析。
+
+<职位描述>
+{safe_jd}
+</职位描述>
+
+<简历>
+{safe_resume}
+</简历>
+
+请输出以下结构的分析报告：
+
+## 📊 综合匹配度
+给出 0-100 的匹配分数，并用 1-2 句话说明理由。
+
+## ✅ 已具备的能力
+列出简历中与 JD 要求高度匹配的技能、经历或背景（每条一行，加粗关键词）。
+
+## ❌ 欠缺的要求
+列出 JD 明确要求但简历中缺失或薄弱的方面，说明影响程度（高 / 中 / 低）。
+
+## 📝 简历优化建议
+针对这个岗位，给出 3-5 条**具体可操作**的简历修改建议，说明在哪一部分加什么内容。
+
+## 💡 面试准备提示
+基于差距分析，给出 2-3 个面试时需要重点准备的方向或常见问题。"""
+    else:
+        prompt = f"""You are a professional career advisor. Perform a deep fit analysis between the resume and job description below.
+
+<job_description>
+{safe_jd}
+</job_description>
+
+<resume>
+{safe_resume}
+</resume>
+
+Produce a structured report with the following sections:
+
+## 📊 Overall Match Score
+Score 0-100 and explain in 1-2 sentences.
+
+## ✅ Strengths You Bring
+List skills/experiences from the resume that strongly match the JD (one per line, bold keywords).
+
+## ❌ Gaps to Address
+List JD requirements missing or weak in the resume, and rate impact (High / Medium / Low).
+
+## 📝 Resume Optimization Tips
+Give 3-5 specific, actionable edits tailored for this role — name the section and what to add.
+
+## 💡 Interview Prep
+Based on the gap analysis, give 2-3 key areas or likely questions to prepare for."""
+
+    async def generate() -> AsyncGenerator[str, None]:
+        try:
+            status_msg = "正在深度分析简历与 JD 的匹配度…" if lang == "zh" else "Analyzing resume-JD fit…"
+            yield f"data: {json.dumps({'type': 'status', 'text': status_msg})}\n\n"
+
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
+                    headers={"Authorization": f"Bearer {LLM_API_KEY.strip()}", "Content-Type": "application/json"},
+                    json={
+                        "model": LLM_MODEL,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "stream": True,
+                        "max_tokens": 1800,
+                    },
+                ) as resp:
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        payload = line[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            delta = json.loads(payload)["choices"][0]["delta"].get("content", "")
+                            if delta:
+                                yield f"data: {json.dumps({'type': 'chunk', 'text': delta})}\n\n"
+                        except Exception:
+                            pass
+
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/generate-jd")
 async def generate_jd(body: GenerateJDRequest):
     if not body.raw_text.strip():

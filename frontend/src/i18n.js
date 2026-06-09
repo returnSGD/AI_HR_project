@@ -41,6 +41,21 @@ const messages = {
       myJobs: '我发布的岗位', jobActive: '招聘中', jobClosed: '已关闭',
       closeJob: '标记已招到', reopenJob: '重新开放',
       closedToast: '岗位已关闭 ✓', reopenedToast: '岗位已重新开放 ✓',
+      jdmatch: 'JD 精准匹配',
+      jdmatchDesc: '粘贴任意 JD，分析与你简历的契合度',
+    },
+    jdm: {
+      title: 'JD 精准匹配',
+      sub: '粘贴来自任意招聘平台的职位描述，上传你的简历，AI 深度分析两者的匹配度',
+      jdLabel: '职位描述 (JD)',
+      jdPh: '将职位描述粘贴到这里…\n\n例如从招聘官网、BOSS 直聘、猎聘等复制完整 JD 内容',
+      clear: '清空',
+      resumeLabel: '我的简历',
+      uploadHint: '📋 点击上传简历文件',
+      analyzeBtn: '🔍 分析匹配度',
+      analyzing: '分析中…',
+      requireBoth: '请先粘贴 JD 并上传简历',
+      reset: '↺ 重新分析',
     }
   },
   en: {
@@ -83,6 +98,21 @@ const messages = {
       myJobs: 'My Job Posts', jobActive: 'Active', jobClosed: 'Closed',
       closeJob: 'Mark as Filled', reopenJob: 'Reopen',
       closedToast: 'Job closed ✓', reopenedToast: 'Job reopened ✓',
+      jdmatch: 'JD Fit Analyzer',
+      jdmatchDesc: 'Paste any JD to analyze how well your resume fits',
+    },
+    jdm: {
+      title: 'JD Fit Analyzer',
+      sub: 'Paste a job description from any platform, upload your resume, and get a deep AI-powered match analysis',
+      jdLabel: 'Job Description (JD)',
+      jdPh: 'Paste the full job description here…\n\nCopy it from LinkedIn, Indeed, or any company career page',
+      clear: 'Clear',
+      resumeLabel: 'My Resume',
+      uploadHint: '📋 Click to upload your resume',
+      analyzeBtn: '🔍 Analyze Fit',
+      analyzing: 'Analyzing…',
+      requireBoth: 'Please paste a JD and upload your resume first',
+      reset: '↺ Analyze Again',
     }
   }
 }
