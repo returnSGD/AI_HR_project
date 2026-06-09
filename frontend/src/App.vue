@@ -1,4 +1,13 @@
 <template>
+  <!-- ── Landing page ── -->
+  <Transition name="lp-leave">
+    <LandingPage v-if="showLanding" @launch="launchApp" />
+  </Transition>
+
+  <!-- ── Main app (hidden until landing dismissed) ── -->
+  <Transition name="app-enter">
+    <div v-if="!showLanding" class="app-wrap">
+
   <header class="hdr">
     <div class="logo"><span class="lb">🎯</span> Offer-Catcher <span class="pill">{{ t('badge') }}</span></div>
     <div class="hr">
@@ -285,16 +294,28 @@
       </div>
     </div>
   </Transition>
+
+  </div><!-- /app-wrap -->
+  </Transition>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import LandingPage from './components/LandingPage.vue'
 import { setLocale } from './i18n.js'
 import { CHINA_CITY_GROUPS } from './cities.js'
 
 const API_BASE = 'https://offer-catcher-api.onrender.com'
 const { t, locale } = useI18n()
+
+// ── Landing page state ────────────────────────────────────────────────
+// Show landing once per session; skip if user came back mid-session
+const showLanding = ref(!sessionStorage.getItem('oc_launched'))
+function launchApp() {
+  sessionStorage.setItem('oc_launched', '1')
+  showLanding.value = false
+}
 
 // ── Global state ──────────────────────────────────────────────────────
 const mode        = ref(localStorage.getItem('oc_mode') || 'seeker') // 'seeker' | 'recruiter'
@@ -887,4 +908,13 @@ body {
 @keyframes cardUp  { from { opacity:0; transform:translateY(22px) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
 @keyframes detailReveal { from { opacity:0; transform:translateY(-12px) scale(.99); } to { opacity:1; transform:translateY(0) scale(1); } }
 @keyframes jdIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+
+/* ─── Landing ↔ App transitions ──────────────────────────────────── */
+.app-wrap { min-height: 100vh; }
+
+.lp-leave-leave-active { transition: opacity .5s cubic-bezier(0.55,0,1,0.45), transform .5s cubic-bezier(0.55,0,1,0.45); position: fixed; inset: 0; z-index: 200; }
+.lp-leave-leave-to   { opacity: 0; transform: scale(.97) translateY(-20px); }
+
+.app-enter-enter-active { transition: opacity .7s cubic-bezier(0.22,1,0.36,1) .3s; }
+.app-enter-enter-from   { opacity: 0; }
 </style>

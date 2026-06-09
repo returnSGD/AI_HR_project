@@ -19,7 +19,8 @@ from PIL import Image
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
 
@@ -1097,6 +1098,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Serve built frontend (Vite outputs to backend/static/) ────────────
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+_INDEX      = os.path.join(_STATIC_DIR, "index.html")
+
+if os.path.isdir(_STATIC_DIR):
+    _ASSETS_DIR = os.path.join(_STATIC_DIR, "assets")
+    if os.path.isdir(_ASSETS_DIR):
+        app.mount("/assets", StaticFiles(directory=_ASSETS_DIR), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    async def serve_root():
+        return FileResponse(_INDEX)
+
+    # SPA catch-all: any unmatched GET that isn't /api/* returns index.html
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(404)
+        candidate = os.path.join(_STATIC_DIR, full_path)
+        if os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(_INDEX)
 
 
 @app.get("/health")
