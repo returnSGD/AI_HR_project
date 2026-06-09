@@ -1260,6 +1260,131 @@ _JD_SYSTEM = (
 )
 
 
+@app.post("/api/draft-resume")
+async def draft_resume(
+    jd_text: str = Form(...),
+    background: str = Form(...),
+    accept_language: str = Header(default="zh-CN"),
+):
+    """Generate a tailored resume draft from a JD + free-text background description."""
+    lang = "zh" if accept_language.lower().startswith("zh") else "en"
+
+    if not jd_text.strip():
+        raise HTTPException(400, "jd_text is required")
+    if not background.strip():
+        raise HTTPException(400, "background is required")
+
+    safe_jd = jd_text.strip()[:3000]
+    safe_bg = background.strip()[:1500]
+
+    if lang == "zh":
+        prompt = f"""你是一位专业的简历撰写师。用户提供了一个职位描述和他的个人背景，请为他量身生成一份结构完整、针对该岗位高度优化的中文简历草稿。
+
+<职位描述>
+{safe_jd}
+</职位描述>
+
+<我的背景>
+{safe_bg}
+</我的背景>
+
+请按以下结构输出简历，每个模块用 ## 标题区分，内容尽可能具体、量化，并将关键词与 JD 对齐：
+
+## 📋 基本信息模板
+姓名 / 联系方式 / 邮箱 / GitHub 或作品链接（提示用户填写）
+
+## 🎓 教育背景
+根据用户描述推断并填写，缺失信息用【请填写】标注
+
+## 💼 实习 / 工作经历
+将用户提到的经历用 STAR 法则扩写，每条经历包含 2-3 个量化成果的 bullet points
+
+## 🚀 项目经历
+将用户提到的项目扩写，突出与 JD 相关的技术栈和成果
+
+## 🛠 专业技能
+从 JD 和用户背景中提取技能，按 **熟练 / 了解 / 接触** 分层列出
+
+## 📝 自我评价
+2-3 句针对该岗位定制的自我评价，融入 JD 中的关键词
+
+## 💡 写作建议
+给出 3-5 条针对该岗位的简历优化提示，告诉用户哪些地方还能加强"""
+    else:
+        prompt = f"""You are a professional resume writer. The user has provided a job description and a brief personal background. Generate a complete, highly tailored English resume draft optimized for the role.
+
+<job_description>
+{safe_jd}
+</job_description>
+
+<my_background>
+{safe_bg}
+</my_background>
+
+Output the resume using the following structure (## headings for each section). Be specific, quantify where possible, and align keywords with the JD:
+
+## 📋 Contact Info Template
+Name / Phone / Email / LinkedIn or GitHub (remind user to fill in)
+
+## 🎓 Education
+Fill in from user's description; mark missing info as [Please fill in]
+
+## 💼 Work / Internship Experience
+Expand each experience using the STAR method, 2-3 quantified bullet points per role
+
+## 🚀 Projects
+Expand mentioned projects, highlight tech stack and outcomes relevant to the JD
+
+## 🛠 Skills
+Extract from JD + user background, tier by **Proficient / Familiar / Exposure**
+
+## 📝 Summary
+2-3 sentences tailored for this role, weaving in JD keywords
+
+## 💡 Resume Tips
+3-5 specific improvement suggestions for this role"""
+
+    async def generate() -> AsyncGenerator[str, None]:
+        try:
+            status_msg = "正在为你定制简历草稿…" if lang == "zh" else "Drafting your tailored resume…"
+            yield f"data: {json.dumps({'type': 'status', 'text': status_msg})}\n\n"
+
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
+                    headers={"Authorization": f"Bearer {LLM_API_KEY.strip()}", "Content-Type": "application/json"},
+                    json={
+                        "model": LLM_MODEL,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "stream": True,
+                        "max_tokens": 2200,
+                    },
+                ) as resp:
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        payload = line[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            delta = json.loads(payload)["choices"][0]["delta"].get("content", "")
+                            if delta:
+                                yield f"data: {json.dumps({'type': 'chunk', 'text': delta})}\n\n"
+                        except Exception:
+                            pass
+
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/analyze-jd")
 async def analyze_jd(
     file: UploadFile = File(...),

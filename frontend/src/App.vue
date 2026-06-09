@@ -179,7 +179,7 @@
 
     <!-- ── JD MATCH MODE ─────────────────────────────────────── -->
     <template v-else-if="mode === 'jdmatch'">
-      <JdMatch />
+      <JdMatch @close="switchTo('seeker')" />
     </template>
 
     <!-- ── RECRUITER MODE ───────────────────────────────────── -->
