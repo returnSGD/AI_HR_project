@@ -356,11 +356,16 @@ const CACHE_KEY = 'cached_resume_analysis'
 // ── Landing page state ────────────────────────────────────────────────────────
 const showLanding = ref(_isReload || !sessionStorage.getItem('oc_launched'))
 
-function launchApp() {
+function launchApp(targetMode = 'seeker') {
   sessionStorage.setItem('oc_launched', '1')
   showLanding.value = false
-  // Restore cached analysis so user needn't re-upload after F5 / mode switch
-  if (mode.value === 'seeker') tryRestoreCache()
+  if (targetMode === 'jdmatch') {
+    switchTo('jdmatch')
+  } else {
+    // Default seeker path — restore cached analysis if available
+    switchTo('seeker')
+    tryRestoreCache()
+  }
 }
 
 // ── Global state ──────────────────────────────────────────────────────

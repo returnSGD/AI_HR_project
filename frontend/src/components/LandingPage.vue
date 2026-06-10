@@ -21,7 +21,7 @@
         <span class="logo-word">Offer-Catcher</span>
         <span class="logo-badge">Beta</span>
       </div>
-      <button class="nav-launch" @click="$emit('launch')">
+      <button class="nav-launch" @click="openModal">
         {{ locale === 'zh' ? '立即使用' : 'Launch App' }}
         <span class="nl-arr">↗</span>
       </button>
@@ -47,7 +47,7 @@
       </p>
 
       <div class="hero-btns ai-in" style="--d:.42s">
-        <button class="cta-btn" @click="$emit('launch')">
+        <button class="cta-btn" @click="openModal">
           <span>{{ locale === 'zh' ? '✨ 立即分析简历' : '✨ Analyze My Resume' }}</span>
           <span class="cta-shine"></span>
         </button>
@@ -134,7 +134,7 @@
       <p class="big-cta-sub">
         {{ locale === 'zh' ? '上传简历，AI 立即为你工作' : 'Upload your resume, let AI do the work' }}
       </p>
-      <button class="cta-btn cta-lg" @click="$emit('launch')">
+      <button class="cta-btn cta-lg" @click="openModal">
         {{ locale === 'zh' ? '🚀 开始使用' : '🚀 Get Started' }}
         <span class="cta-shine"></span>
       </button>
@@ -144,6 +144,42 @@
     <footer class="lp-footer">
       <span>© 2025 Offer-Catcher · Built with DeepSeek AI</span>
     </footer>
+
+    <!-- ── 意向岗位分流弹窗 ── -->
+    <Transition name="modal">
+      <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+        <div class="modal-card">
+          <button class="modal-close" @click="closeModal">✕</button>
+          <div class="modal-icon">🎯</div>
+          <h3 class="modal-title">
+            {{ locale === 'zh' ? '您是否有心仪的意向岗位？' : 'Do you have a target role in mind?' }}
+          </h3>
+          <p class="modal-sub">
+            {{ locale === 'zh'
+              ? '这将决定为您匹配的精准度'
+              : 'This shapes how we match you.' }}
+          </p>
+          <div class="modal-btns">
+            <button class="modal-btn modal-btn-primary" @click="chooseMode('jdmatch')">
+              <span class="mbtn-ico">📋</span>
+              <span class="mbtn-text">
+                <strong>{{ locale === 'zh' ? '是，我有明确岗位' : 'Yes, I have a target role' }}</strong>
+                <small>{{ locale === 'zh' ? '粘贴 JD，精准匹配' : 'Paste a JD for precision matching' }}</small>
+              </span>
+              <span class="mbtn-arr">→</span>
+            </button>
+            <button class="modal-btn modal-btn-secondary" @click="chooseMode('seeker')">
+              <span class="mbtn-ico">🤖</span>
+              <span class="mbtn-text">
+                <strong>{{ locale === 'zh' ? '否，请帮我智能推荐' : 'No, recommend for me' }}</strong>
+                <small>{{ locale === 'zh' ? '上传简历，AI 盲投推荐' : 'Upload resume, AI picks the best fits' }}</small>
+              </span>
+              <span class="mbtn-arr">→</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -151,8 +187,14 @@
 import { ref, onMounted, onUnmounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-defineEmits(['launch'])
+const emit = defineEmits(['launch'])
 const { locale } = useI18n()
+
+// ── Intent modal ──────────────────────────────────────────────
+const showModal = ref(false)
+function openModal()    { showModal.value = true }
+function closeModal()   { showModal.value = false }
+function chooseMode(mode) { closeModal(); emit('launch', mode) }
 
 // ── refs ────────────────────────────────────────────────────
 const lpRoot    = ref(null)
@@ -655,4 +697,74 @@ section { position:relative; z-index:10; }
   .hero-h1 { letter-spacing:-.02em; }
   .cards-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── Intent Modal ─────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(0,0,0,.65);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-card {
+  position: relative;
+  background: rgba(10,10,28,.92);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 24px;
+  padding: 40px 36px 36px;
+  max-width: 460px; width: 100%;
+  box-shadow: 0 32px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.06);
+  text-align: center;
+}
+.modal-close {
+  position: absolute; top: 16px; right: 18px;
+  background: none; border: none; color: #64748b;
+  font-size: .9rem; cursor: pointer;
+  transition: color .2s;
+}
+.modal-close:hover { color: #f1f5f9; }
+.modal-icon { font-size: 2.4rem; margin-bottom: 12px; }
+.modal-title {
+  font-size: 1.18rem; font-weight: 700; color: #f1f5f9;
+  letter-spacing: -.02em; margin-bottom: 8px;
+}
+.modal-sub { font-size: .83rem; color: #64748b; margin-bottom: 28px; }
+.modal-btns { display: flex; flex-direction: column; gap: 12px; }
+.modal-btn {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 18px; border-radius: 16px;
+  border: 1px solid transparent; cursor: pointer;
+  text-align: left; transition: all .28s cubic-bezier(.22,1,.36,1);
+}
+.modal-btn-primary {
+  background: rgba(245,166,35,.1);
+  border-color: rgba(245,166,35,.3);
+}
+.modal-btn-primary:hover {
+  background: rgba(245,166,35,.18);
+  border-color: rgba(245,166,35,.6);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(245,166,35,.2);
+}
+.modal-btn-secondary {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.1);
+}
+.modal-btn-secondary:hover {
+  background: rgba(255,255,255,.09);
+  border-color: rgba(255,255,255,.22);
+  transform: translateY(-2px);
+}
+.mbtn-ico { font-size: 1.5rem; flex-shrink: 0; }
+.mbtn-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.mbtn-text strong { font-size: .88rem; color: #f1f5f9; font-weight: 600; }
+.mbtn-text small  { font-size: .76rem; color: #64748b; }
+.mbtn-arr { color: #64748b; font-size: .85rem; transition: transform .2s, color .2s; }
+.modal-btn:hover .mbtn-arr { color: #f1f5f9; transform: translateX(4px); }
+
+/* modal transition */
+.modal-enter-active, .modal-leave-active { transition: opacity .25s ease, transform .3s cubic-bezier(.22,1,.36,1); }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+.modal-enter-from .modal-card { transform: scale(.92) translateY(16px); }
+.modal-leave-to .modal-card { transform: scale(.95) translateY(8px); }
 </style>
