@@ -142,7 +142,7 @@
 
     <!-- ── Footer ── -->
     <footer class="lp-footer">
-      <span>© 2025 Offer-Catcher · Built with DeepSeek AI</span>
+      <span>© 2026 Offer-Catcher · Built with DeepSeek AI</span>
     </footer>
 
     <!-- ── 意向岗位分流弹窗 ── -->
