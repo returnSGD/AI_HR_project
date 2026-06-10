@@ -859,6 +859,8 @@ async def extract_text(data: bytes, content_type: str, filename: str, lang: str)
         except ImportError:
             raise HTTPException(503, _err("no_tesseract", lang))
         except Exception as e:
+            if "tesseract" in str(e).lower():
+                raise HTTPException(503, _err("no_tesseract", lang))
             raise HTTPException(422, _err("parse_failed", lang, detail=str(e)))
 
     # ── DOCX ─────────────────────────────────────────────────────────
@@ -892,8 +894,9 @@ async def extract_text(data: bytes, content_type: str, filename: str, lang: str)
         if VISION_MODEL:
             try:
                 return await _ocr_via_vision_llm(data, img_mime, lang)
-            except Exception:
-                pass  # fall through to Tesseract
+            except Exception as exc:
+                # Surface the real API error rather than silently falling through
+                raise HTTPException(422, _err("parse_failed", lang, detail=str(exc)))
 
         # Fallback: Tesseract (run in thread to avoid blocking the event loop)
         try:
@@ -904,6 +907,10 @@ async def extract_text(data: bytes, content_type: str, filename: str, lang: str)
         except ImportError:
             raise HTTPException(503, _err("no_tesseract", lang))
         except Exception as e:
+            # TesseractNotFoundError is an EnvironmentError, not ImportError —
+            # catch it here so users see the friendly message, not a stack trace.
+            if "tesseract" in str(e).lower():
+                raise HTTPException(503, _err("no_tesseract", lang))
             raise HTTPException(422, _err("parse_failed", lang, detail=str(e)))
 
     # ── Excel (.xlsx / .xls) ─────────────────────────────────────────
