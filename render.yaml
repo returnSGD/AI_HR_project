@@ -17,15 +17,12 @@ services:
         value: https://api.deepseek.com/v1
       - key: LLM_MODEL
         value: deepseek-chat
-      # Vision model for image (JPG/PNG) OCR — uses DeepSeek OpenAI-compatible API.
-      # deepseek-chat supports base64 image_url input; same key/URL as main LLM.
-      # Set VISION_API_KEY in Render console if using a separate DeepSeek key;
-      # otherwise leave unset and it falls back to LLM_API_KEY automatically.
-      # deepseek-chat is text-only and does not support image input.
-      # Set to a vision-capable model (e.g. gpt-4o-mini) when one is available.
+      # Vision model for image OCR — Qwen-VL via DashScope OpenAI-compatible API.
+      # qwen-vl-plus is fast and affordable; supports base64 image_url input.
+      # VISION_API_KEY must be set in Render console (DashScope key, not DeepSeek).
       - key: VISION_MODEL
-        value: ""
+        value: qwen-vl-plus
       - key: VISION_API_KEY
         sync: false
       - key: VISION_BASE_URL
-        value: https://api.deepseek.com/v1
+        value: https://dashscope.aliyuncs.com/compatible-mode/v1
