@@ -765,16 +765,16 @@ def _ocr_image(image: "Image.Image") -> str:
 
 
 async def _ocr_via_vision_llm(data: bytes, img_mime: str, lang: str) -> str:
-    """Send image bytes to a vision-capable LLM and return extracted text."""
+    """Send image bytes to DeepSeek (OpenAI-compatible) and return extracted text."""
     import base64
     b64 = base64.b64encode(data).decode()
     api_key  = (VISION_API_KEY  or LLM_API_KEY).strip()
     base_url = (VISION_BASE_URL or LLM_BASE_URL).rstrip("/")
     model    = VISION_MODEL
-    prompt = (
-        "请将这张图片中的所有文字完整转录出来，保持原有排版结构。只输出文字内容，不要添加任何说明。"
+    user_prompt = (
+        "请提取这张图片中的所有文字，保留原有排版结构，直接输出文字内容。"
         if lang == "zh" else
-        "Transcribe every piece of text in this image, preserving its layout. Output text only, no explanations."
+        "Extract all text from this image, preserving its layout. Output the text only."
     )
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(
@@ -782,10 +782,23 @@ async def _ocr_via_vision_llm(data: bytes, img_mime: str, lang: str) -> str:
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
                 "model": model,
-                "messages": [{"role": "user", "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:{img_mime};base64,{b64}"}},
-                    {"type": "text", "text": prompt},
-                ]}],
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是一个精准的OCR引擎。只输出图片中的原始文字，保留排版，不添加任何解释、标签或额外内容。"
+                            if lang == "zh" else
+                            "You are a precise OCR engine. Output only the raw text from the image, preserving layout. No explanations, no labels, no extra content."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:{img_mime};base64,{b64}"}},
+                            {"type": "text", "text": user_prompt},
+                        ],
+                    },
+                ],
                 "max_tokens": 3000,
             },
         )

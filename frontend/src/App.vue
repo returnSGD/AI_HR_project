@@ -6,7 +6,14 @@
 
   <!-- ── Main app (hidden until landing dismissed) ── -->
   <Transition name="app-enter">
-    <div v-if="!showLanding" class="app-wrap">
+    <div v-if="!showLanding" class="app-wrap" @mousemove="onAppMouse">
+    <canvas ref="appCanvas" class="app-bg-canvas" aria-hidden="true"></canvas>
+    <div class="app-aurora" aria-hidden="true">
+      <div class="aab aab1"></div>
+      <div class="aab aab2"></div>
+      <div class="aab aab3"></div>
+    </div>
+    <div ref="appCursorGlow" class="app-cursor-glow" aria-hidden="true"></div>
 
   <header class="hdr">
     <div class="logo" @click="showLanding = true" title="回到首页"><span class="lb">🎯</span> Offer-Catcher <span class="pill">{{ t('badge') }}</span></div>
@@ -316,7 +323,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LandingPage from './components/LandingPage.vue'
 import JdMatch from './components/JdMatch.vue'
@@ -675,6 +682,65 @@ async function reopenJob(jobId) {
     showToast(t('recruiter.reopenedToast'))
   } catch (e) { err.value = e.message || t('error.api') }
 }
+
+// ── Cinematic background (canvas particles + cursor glow) ─────────────
+const appCanvas      = ref(null)
+const appCursorGlow  = ref(null)
+let appMx = 0, appMy = 0, appCgx = 0, appCgy = 0
+let appCleanup = null
+
+function initAppCanvas() {
+  if (appCleanup) { appCleanup(); appCleanup = null }
+  const canvas = appCanvas.value
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  const N = 65, MAX_D = 130
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
+  resize()
+  window.addEventListener('resize', resize)
+  const pts = Array.from({ length: N }, () => ({
+    x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+    vx: (Math.random() - .5) * .4,   vy: (Math.random() - .5) * .4,
+    r: Math.random() * 1.5 + .5,
+  }))
+  let rafId = null
+  function draw() {
+    rafId = requestAnimationFrame(draw)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    for (const p of pts) {
+      p.x += p.vx; p.y += p.vy
+      if (p.x < 0 || p.x > canvas.width)  p.vx *= -1
+      if (p.y < 0 || p.y > canvas.height) p.vy *= -1
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(148,163,184,.45)'; ctx.fill()
+    }
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+      const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y
+      const d = Math.sqrt(dx * dx + dy * dy)
+      if (d < MAX_D) {
+        ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[j].x, pts[j].y)
+        ctx.strokeStyle = `rgba(148,163,184,${.12 * (1 - d / MAX_D)})`
+        ctx.lineWidth = .6; ctx.stroke()
+      }
+    }
+    appCgx += (appMx - appCgx) * .09; appCgy += (appMy - appCgy) * .09
+    if (appCursorGlow.value) {
+      appCursorGlow.value.style.left = appCgx + 'px'
+      appCursorGlow.value.style.top  = appCgy + 'px'
+    }
+  }
+  draw()
+  appCleanup = () => { window.removeEventListener('resize', resize); cancelAnimationFrame(rafId) }
+}
+
+function onAppMouse(e) { appMx = e.clientX; appMy = e.clientY }
+
+watch(showLanding, (val) => {
+  if (!val) nextTick(() => initAppCanvas())
+  else if (appCleanup) { appCleanup(); appCleanup = null }
+}, { immediate: true })
+
+onUnmounted(() => { if (appCleanup) { appCleanup(); appCleanup = null } })
 </script>
 
 <style>
@@ -961,8 +1027,49 @@ body {
 @keyframes detailReveal { from { opacity:0; transform:translateY(-12px) scale(.99); } to { opacity:1; transform:translateY(0) scale(1); } }
 @keyframes jdIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
 
+/* --- Cinematic background (canvas + aurora + cursor glow) ---------- */
+.app-bg-canvas {
+  position: fixed; inset: 0; z-index: -1;
+  width: 100%; height: 100%; pointer-events: none;
+}
+.app-aurora {
+  position: fixed; inset: 0; z-index: -1;
+  pointer-events: none; overflow: hidden;
+}
+.aab {
+  position: absolute; border-radius: 50%;
+  filter: blur(88px); opacity: .45;
+  animation: float 8s ease-in-out infinite;
+}
+.aab1 {
+  width: 560px; height: 560px;
+  background: radial-gradient(circle, rgba(99,102,241,.55) 0%, transparent 70%);
+  top: -180px; left: -120px; animation-duration: 11s;
+}
+.aab2 {
+  width: 420px; height: 420px;
+  background: radial-gradient(circle, rgba(139,92,246,.5) 0%, transparent 70%);
+  bottom: -100px; right: -80px; animation-duration: 9s; animation-delay: -3s;
+}
+.aab3 {
+  width: 340px; height: 340px;
+  background: radial-gradient(circle, rgba(245,166,35,.35) 0%, transparent 70%);
+  top: 40%; left: 55%; animation-duration: 13s; animation-delay: -6s;
+}
+.app-cursor-glow {
+  position: fixed; z-index: 999; pointer-events: none;
+  width: 320px; height: 320px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(99,102,241,.12) 0%, transparent 65%);
+  transform: translate(-50%, -50%);
+  transition: opacity .4s;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%       { transform: translateY(-28px) scale(1.04); }
+}
+
 /* --- Landing / App transitions ------------------------------------- */
-.app-wrap { min-height: 100vh; background: #050510; }
+.app-wrap { min-height: 100vh; }
 
 .lp-leave-leave-active { transition: opacity .5s cubic-bezier(0.55,0,1,0.45), transform .5s cubic-bezier(0.55,0,1,0.45); position: fixed; inset: 0; z-index: 200; }
 .lp-leave-leave-to   { opacity: 0; transform: scale(.97) translateY(-20px); }

@@ -17,14 +17,13 @@ services:
         value: https://api.deepseek.com/v1
       - key: LLM_MODEL
         value: deepseek-chat
-      # Vision model for image (JPG/PNG) OCR — must support multimodal input.
-      # deepseek-chat is text-only; set VISION_MODEL to a vision-capable model,
-      # e.g. gpt-4o-mini (OpenAI) or claude-haiku (Anthropic).
-      # Leave empty to fall back to Tesseract (requires system install).
+      # Vision model for image (JPG/PNG) OCR — uses DeepSeek OpenAI-compatible API.
+      # deepseek-chat supports base64 image_url input; same key/URL as main LLM.
+      # Set VISION_API_KEY in Render console if using a separate DeepSeek key;
+      # otherwise leave unset and it falls back to LLM_API_KEY automatically.
       - key: VISION_MODEL
-        value: ""
-      # Override only if vision model uses a different API key / base URL:
-      # - key: VISION_API_KEY
-      #   sync: false
-      # - key: VISION_BASE_URL
-      #   value: https://api.openai.com/v1
+        value: deepseek-chat
+      - key: VISION_API_KEY
+        sync: false
+      - key: VISION_BASE_URL
+        value: https://api.deepseek.com/v1
