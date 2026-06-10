@@ -648,7 +648,9 @@ onUnmounted(() => {
 /* ── Textarea ── */
 .ta-wrap {
   border: 1.5px solid rgba(255,255,255,.08);
-  border-radius: 16px; overflow: hidden;
+  border-radius: 16px;
+  overflow: hidden;     /* clips child if somehow it still overflows */
+  max-height: 340px;    /* parent cap — top boundary can never rise above JD panel */
   transition: border-color .35s cubic-bezier(0.22,1,0.36,1), box-shadow .35s cubic-bezier(0.22,1,0.36,1);
   position: relative; z-index: 1;
 }
@@ -657,13 +659,17 @@ onUnmounted(() => {
   box-shadow: 0 0 0 3px rgba(99,102,241,.12);
 }
 .glass-ta {
-  display: block; width: 100%; min-height: 280px;
+  display: block; width: 100%;
+  height: 280px;        /* fixed height — prevents infinite vertical growth */
+  min-height: 120px;    /* graceful floor on very small viewports */
+  max-height: 320px;    /* hard ceiling */
+  overflow-y: auto;     /* scroll inside instead of expanding the panel */
   background: rgba(255,255,255,.03); color: #e2e8f0;
   border: none; outline: none; resize: none;
   padding: 15px 16px;
   font-size: .86rem; line-height: 1.75; font-family: inherit;
 }
-.bg-ta { min-height: 240px; }
+.bg-ta { height: 220px; max-height: 260px; }
 .glass-ta::placeholder { color: #334155; }
 
 .ta-bar {

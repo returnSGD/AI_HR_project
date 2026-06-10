@@ -806,6 +806,39 @@ async def _ocr_via_vision_llm(data: bytes, img_mime: str, lang: str) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
+# Module-level singleton — model loads once, reused across requests
+_paddle_ocr_instance = None
+
+
+async def _ocr_via_paddle(data: bytes) -> str:
+    """Extract text from image bytes using PaddleOCR (CPU, Chinese + English)."""
+    import asyncio
+    import io
+
+    def _run() -> str:
+        global _paddle_ocr_instance
+        import numpy as np
+        from PIL import Image as PILImage
+        if _paddle_ocr_instance is None:
+            from paddleocr import PaddleOCR
+            _paddle_ocr_instance = PaddleOCR(
+                use_angle_cls=True, lang='ch', use_gpu=False, show_log=False
+            )
+        img = PILImage.open(io.BytesIO(data)).convert('RGB')
+        result = _paddle_ocr_instance.ocr(np.array(img), cls=True)
+        lines: list[str] = []
+        for block in (result or []):
+            for item in (block or []):
+                if item and len(item) >= 2 and item[1] and item[1][0]:
+                    text = item[1][0].strip()
+                    if text:
+                        lines.append(text)
+        return "\n".join(lines)
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _run)
+
+
 async def extract_text(data: bytes, content_type: str, filename: str, lang: str) -> str:
     """
     Dispatch to the right extractor based on MIME type / filename extension.
@@ -898,7 +931,17 @@ async def extract_text(data: bytes, content_type: str, filename: str, lang: str)
                 # Surface the real API error rather than silently falling through
                 raise HTTPException(422, _err("parse_failed", lang, detail=str(exc)))
 
-        # Fallback: Tesseract (run in thread to avoid blocking the event loop)
+        # Secondary: PaddleOCR (bundled, no external API key needed)
+        try:
+            text = await _ocr_via_paddle(data)
+            if text.strip():
+                return text
+        except ImportError:
+            pass  # PaddleOCR not installed — fall through to Tesseract
+        except Exception:
+            pass  # PaddleOCR runtime error — fall through to Tesseract
+
+        # Final fallback: Tesseract (run in thread to avoid blocking the event loop)
         try:
             import io, asyncio
             img = Image.open(io.BytesIO(data))
