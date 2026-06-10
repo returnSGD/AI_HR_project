@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import random
 import re
 import sqlite3
 import time
@@ -412,13 +413,18 @@ STOPWORDS = {
 
 
 def tokenize(text: str) -> list[str]:
-    # Extract Chinese word blocks first, then lowercase the remainder for ASCII tokens.
     chinese = re.findall(r"[一-龥]+", text)
     ascii_part = re.sub(r"[^a-z0-9\s\+\#\.\/\-]", " ", text.lower())
-    ascii_tokens = [w for w in ascii_part.split() if len(w) > 1 and w not in STOPWORDS]
-    # Chinese single-chars are too short to be meaningful; keep blocks of 2+ chars.
-    chinese_tokens = [c for c in chinese if len(c) >= 2]
-    return ascii_tokens + chinese_tokens
+    ascii_raw = [w for w in ascii_part.split() if len(w) > 1 and w not in STOPWORDS]
+    chinese_raw = [c for c in chinese if len(c) >= 2]
+    # Anti-stuffing: each token counted at most twice (one per legitimate context).
+    freq: dict[str, int] = {}
+    result: list[str] = []
+    for t in ascii_raw + chinese_raw:
+        if freq.get(t, 0) < 2:
+            result.append(t)
+            freq[t] = freq.get(t, 0) + 1
+    return result
 
 
 # ── Major-category → relevant keyword mapping (for Dim-4 cross-match) ──
@@ -433,9 +439,22 @@ _MAJOR_KEYWORDS: dict[str, list[str]] = {
 }
 
 
-def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
+def _get_job_min_tier(job: dict) -> int:
+    """Return minimum education tier required for a job (1=highest quality, 4=open to 专科)."""
+    title_low = (job.get("title") or "").lower()
+    if any(w in title_low for w in ["研究员", "scientist", "principal", "staff", "专家"]):
+        return 2
+    if any(w in title_low for w in ["大模型", "llm", "rlhf", "预训练", "量化研究"]):
+        return 2
+    if any(w in title_low for w in ["实习", "intern"]):
+        return 4
+    return 3  # standard 校招/社招: 本科 minimum
+
+
+def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> dict:
     """
     Multi-dimensional scoring.
+    Returns {"total_score": int, "details": {"keyword_score", "edu_score", "intent_score", "city_score", "major_score"}}
 
     meta keys (all optional):
         graduation_year  int   – expected/actual graduation year
@@ -466,43 +485,41 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
             hits += 0.4
 
     kw_count = max(len(job["keywords"]), 1)
-    # Cap denominator at 10: jobs with 15 keywords aren't unfairly penalised
-    # vs jobs with 5 — 5 correct skill hits always means ≥50% relevance.
     hit_ratio = min(hits / min(kw_count, 10), 1.0)
 
+    # Gaussian micro-perturbation for near-zero hit cases prevents tied scores.
+    if hit_ratio < 0.05:
+        hit_ratio = max(0.0, hit_ratio + random.gauss(0, 0.015))
+
+    keyword_score = int(hit_ratio * 62)
+
     if meta is None:
-        # Legacy path — pure keyword scoring, no metadata
         bonus = 8 if job.get("source_type") in ("crawled", "user_posted") else 0
-        return min(int(base_score + hit_ratio * 62) + bonus, 98)
+        total = min(int(base_score + hit_ratio * 62) + bonus, 98)
+        return {
+            "total_score": total,
+            "details": {"keyword_score": keyword_score, "edu_score": 0, "intent_score": 0, "city_score": 0, "major_score": 0},
+        }
 
     # ── Dim 3: Education tier (multiplicative) ───────────────────────
     edu_tier = meta.get("education_tier")
-    title_low = job.get("title", "").lower()
+    min_tier = _get_job_min_tier(job)
 
-    if any(w in title_low for w in ["研究员", "scientist", "principal", "staff", "专家"]):
-        min_tier = 2                        # research / senior roles
-    elif any(w in title_low for w in ["大模型", "llm", "rlhf", "预训练", "量化研究"]):
-        min_tier = 2                        # competitive AI roles
-    elif any(w in title_low for w in ["实习", "intern"]):
-        min_tier = 4                        # internships: open to 专科
-    else:
-        min_tier = 3                        # 校招 / 社招 / regular dev: 本科 minimum
-
-    keyword_score = hit_ratio * 62.0
     raw = float(base_score + keyword_score)
+    raw_pre_edu = raw
 
     if edu_tier and edu_tier > min_tier:
         tier_gap = edu_tier - min_tier
-        # Multiplicative: gap=1 → ×0.40, gap=2 → ×0.16, gap≥3 → ×0.06
-        # No "breakout" — keyword stuffing cannot override education mismatch
+        # gap=1 → ×0.40, gap=2 → ×0.16, gap≥3 → ×0.06; keyword hits cannot override edu mismatch
         raw *= (0.40 ** tier_gap)
+
+    edu_score = int(raw - raw_pre_edu)
 
     # ── Dim 1: Academic year + job-type preference filter ────────────
     _title = (job.get("title") or "").lower()
     _jtype = (job.get("type")  or "").lower()
     _desc  = (job.get("description") or "").lower()
 
-    # Separate intern from campus-hire from full-time/social
     is_intern_role = any(kw in _title + _jtype for kw in ["实习", "intern"])
     is_campus_role = (
         any(kw in _title + _jtype for kw in ["校招", "graduate", "junior", "应届"])
@@ -523,9 +540,9 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
 
     preferred_type = (meta.get("preferred_type") or "").strip()
     grad_year = meta.get("graduation_year")
+    raw_pre_intent = raw
 
     if preferred_type and preferred_type not in ("不限", ""):
-        # ── User-explicit type selection (highest priority) ───────────
         if preferred_type == "实习":
             if is_intern_role:
                 raw += 20
@@ -546,7 +563,6 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
     elif grad_year:
         current_year = datetime.now().year
         if grad_year > current_year:
-            # ── In school, not graduating: internships only ───────────
             if is_intern_role:
                 raw += 20
             elif is_campus_role:
@@ -554,9 +570,8 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
             elif is_senior_role or is_fulltime_social:
                 raw *= 0.06
             else:
-                raw *= 0.12   # unknown type — same as campus penalty
+                raw *= 0.12
         elif grad_year == current_year:
-            # ── Graduating this year: intern + campus ─────────────────
             if is_intern_role:
                 raw += 20
             elif is_campus_role:
@@ -566,33 +581,47 @@ def score_job(tokens: list[str], job: dict, meta: Optional[dict] = None) -> int:
             elif is_fulltime_social:
                 raw *= 0.20
         else:
-            # ── Already graduated ─────────────────────────────────────
             if is_intern_role:
                 raw *= 0.75
             elif is_senior_role:
                 raw += 6
 
+    intent_score = int(raw - raw_pre_intent)
+
     # ── Dim 2: City preference ────────────────────────────────────────
     preferred_city = (meta.get("preferred_city") or "").strip()
+    raw_pre_city = raw
     if preferred_city:
         if preferred_city in (job.get("location") or ""):
-            raw += 22           # explicit city match — strong boost
+            raw += 22
         else:
-            raw *= 0.65         # off-city penalty when user stated a preference
+            raw *= 0.65
+    city_score = int(raw - raw_pre_city)
 
     # ── Dim 4: Major cross-match ──────────────────────────────────────
     major = meta.get("major_category") or ""
+    raw_pre_major = raw
     if major in _MAJOR_KEYWORDS:
         job_text = " ".join(job.get("tags", [])) + " " + (job.get("description") or "")
         job_lower = job_text.lower()
         if any(kw in job_lower for kw in _MAJOR_KEYWORDS[major]):
             raw += 5
+    major_score = int(raw - raw_pre_major)
 
     # ── Real-job priority bonus ───────────────────────────────────────
     if job.get("source_type") in ("crawled", "user_posted"):
         raw += 8
 
-    return min(max(int(raw), 5), 98)
+    return {
+        "total_score": min(max(int(raw), 5), 98),
+        "details": {
+            "keyword_score": keyword_score,
+            "edu_score": edu_score,
+            "intent_score": intent_score,
+            "city_score": city_score,
+            "major_score": major_score,
+        },
+    }
 
 
 def skill_gap(tokens: list[str], job: dict) -> tuple[list[str], list[str]]:
@@ -640,11 +669,17 @@ def get_top_jobs(
             if ej["id"] not in existing_ids:
                 ej.setdefault("color", COMPANY_COLORS.get(ej.get("company", ""), "#6B7280"))
                 jobs.append(ej)
-    scored = sorted(
-        [{**j, "score": score_job(tokens, j, effective_meta or None)} for j in jobs],
-        key=lambda x: x["score"],
-        reverse=True,
-    )
+    # Hard knockout: 专科(tier≥4) candidates are removed from non-intern 本科+ roles before scoring.
+    edu_tier = (effective_meta or {}).get("education_tier")
+    scored_list: list[dict] = []
+    for j in jobs:
+        if edu_tier and edu_tier >= 4 and _get_job_min_tier(j) <= 3:
+            _jt = (j.get("title") or "").lower() + (j.get("type") or "").lower()
+            if not any(kw in _jt for kw in ["实习", "intern"]):
+                continue  # one-strike education knockout
+        result = score_job(tokens, j, effective_meta or None)
+        scored_list.append({**j, "score": result["total_score"], "score_details": result["details"]})
+    scored = sorted(scored_list, key=lambda x: x["score"], reverse=True)
 
     # Diversity re-ranking: pick top-n while capping each company at _MAX_PER_COMPANY
     results: list[dict] = []
@@ -741,6 +776,27 @@ _RESUME_SIGNALS: frozenset[str] = frozenset([
 _RESUME_SIGNAL_THRESHOLD = 2   # must hit at least 2 signals
 
 
+def _is_valid_content(text: str) -> bool:
+    """Return False if text looks like garbage, encoded data, or code rather than human-written prose."""
+    cleaned = text.strip()
+    if len(cleaned) < 30:
+        return False
+    # Characters that appear in legitimate human-written resumes
+    normal = sum(
+        1 for c in cleaned
+        if c.isalpha() or c.isdigit() or '一' <= c <= '鿿'
+        or c in ' \t\n\r.,;:?!—-_()/\\@#%+='
+    )
+    if (1.0 - normal / len(cleaned)) > 0.40:
+        return False
+    # Detect pathological single-char repetition (>50% one char → noise or attack)
+    if len(cleaned) > 100:
+        most_freq = max(set(cleaned), key=cleaned.count)
+        if cleaned.count(most_freq) / len(cleaned) > 0.50:
+            return False
+    return True
+
+
 def _looks_like_resume(text: str) -> bool:
     low = text.lower()
     return sum(1 for sig in _RESUME_SIGNALS if sig in low) >= _RESUME_SIGNAL_THRESHOLD
@@ -770,6 +826,10 @@ ERRORS: dict[str, dict[str, str]] = {
     "no_tesseract": {
         "zh": "暂不支持纯图片格式的简历识别，请改用文字版 PDF 或 Word (.docx) 文档上传。",
         "en": "Image-only resumes are not supported. Please upload a text-based PDF or Word (.docx) document instead.",
+    },
+    "invalid_content": {
+        "zh": "简历内容解析异常，未检测到合法文本结构，请上传正规格式的简历（PDF、Word 或纯文本）。",
+        "en": "Resume content appears invalid or corrupted. Please upload a properly formatted CV (PDF, Word, or plain text).",
     },
 }
 
@@ -1184,11 +1244,15 @@ async def match_resume(
     if len(resume_text.strip()) < 50:
         raise HTTPException(status_code=422, detail=_err("empty_content", lang))
 
-    # ── 5. Resume semantics guard ─────────────────────────────────────
+    # ── 5. Resume content validity guard (entropy / garbage filter) ──
+    if not _is_valid_content(resume_text):
+        raise HTTPException(status_code=422, detail=_err("invalid_content", lang))
+
+    # ── 6. Resume semantics guard ─────────────────────────────────────
     if not _looks_like_resume(resume_text):
         raise HTTPException(status_code=422, detail=_err("not_resume", lang))
 
-    # ── 6. Kick off background tasks (do NOT await yet — stream starts first) ──
+    # ── 7. Kick off background tasks (do NOT await yet — stream starts first) ──
     meta_task  = asyncio.create_task(extract_resume_metadata(resume_text))
     crawl_task = asyncio.create_task(
         fetch_jobs_for_resume(resume_text, preferred_type.strip())
