@@ -325,6 +325,7 @@
 <script setup>
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import DOMPurify from 'dompurify'
 import LandingPage from './components/LandingPage.vue'
 import JdMatch from './components/JdMatch.vue'
 import { setLocale } from './i18n.js'
@@ -465,7 +466,7 @@ function renderMarkdown(md) {
   }
   if (tbuf.length) flushTable()
   if (ul) html += '</ul>'
-  return html
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
 }
 
 const ALLOWED_EXTS = new Set(['pdf','docx','doc','xlsx','xls','md','txt','jpg','jpeg','png'])

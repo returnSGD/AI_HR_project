@@ -47,6 +47,28 @@ LANG_INSTRUCTION = {
 # ── Static data (loaded from data/ at startup) ────────────────────────
 import pathlib as _pl
 
+# ── Prompt-injection blacklist ────────────────────────────────────────────────
+# These patterns are classic injection prefixes. Matching text is replaced with
+# a harmless placeholder before the string is embedded in any LLM prompt.
+_INJECTION_RE = re.compile(
+    r"ignore\s+(previous|above|all\s+previous)\s+instructions?"
+    r"|system\s+prompt"
+    r"|new\s+instructions?"
+    r"|you\s+are\s+now"
+    r"|act\s+as\s+(a\s+)?(new|different|evil|uncensored)"
+    r"|forget\s+(everything|all)"
+    r"|重新设定(你的)?角色"
+    r"|忘(记|掉)(之前|所有)(的)?(指令|要求|提示)"
+    r"|你(现在)?是.{0,10}(助手|机器人|AI|模型)"
+    r"|越狱|jailbreak|DAN\b",
+    re.IGNORECASE,
+)
+
+def _sanitize_input(text: str) -> str:
+    """Replace obvious prompt-injection phrases with a safe placeholder."""
+    return _INJECTION_RE.sub("[内容已过滤]", text)
+
+
 _DATA_DIR = _pl.Path(__file__).parent / 'data'
 
 with open(_DATA_DIR / 'company_colors.json', encoding='utf-8') as _f:
@@ -972,7 +994,7 @@ _SYSTEM_PROMPT = (
 
 def build_prompt(resume_text: str, jobs: list[dict], lang: str) -> str:
     instr = LANG_INSTRUCTION.get(lang, LANG_INSTRUCTION["zh"])
-    safe_resume = resume_text[:MAX_CHARS]
+    safe_resume = _sanitize_input(resume_text[:MAX_CHARS])
 
     def _gap_line_zh(j: dict) -> str:
         m = "、".join((j.get("matched_kws") or [])[:6])
@@ -1177,30 +1199,30 @@ async def match_resume(
     _pref_type = preferred_type.strip()
 
     async def event_stream():
-        # ── Immediate status: tell user we are hitting Tencent Careers ────
-        queries      = _resume_to_queries(resume_text, _pref_type)
-        crawl_notice = "🌐 正在从腾讯招聘获取实时岗位（关键词：" + "、".join(queries) + "）…"
-        yield "data: " + json.dumps({"type": "status", "text": crawl_notice}) + "\n\n"
-
-        # ── Wait for both tasks ────────────────────────────────────────────
-        meta, live_jobs = await asyncio.gather(meta_task, crawl_task)
-
-        # User-supplied preferences override LLM-extracted values
-        if _pref_city:
-            meta["preferred_city"] = _pref_city
-        if _pref_type and _pref_type != "不限":
-            meta["preferred_type"] = _pref_type
-
-        matched    = get_top_jobs(resume_text, meta=meta, extra_jobs=live_jobs)
-        live_count = sum(1 for j in matched if j.get("source_type") == "crawled")
-
-        yield f"data: {json.dumps({'type':'jobs','jobs':matched,'live_count':live_count})}\n\n"
         try:
+            # ── Immediate status: tell user we are hitting Tencent Careers ──
+            queries      = _resume_to_queries(resume_text, _pref_type)
+            crawl_notice = "🌐 正在从腾讯招聘获取实时岗位（关键词：" + "、".join(queries) + "）…"
+            yield "data: " + json.dumps({"type": "status", "text": crawl_notice}) + "\n\n"
+
+            # ── Wait for both tasks ──────────────────────────────────────────
+            meta, live_jobs = await asyncio.gather(meta_task, crawl_task)
+
+            # User-supplied preferences override LLM-extracted values
+            if _pref_city:
+                meta["preferred_city"] = _pref_city
+            if _pref_type and _pref_type != "不限":
+                meta["preferred_type"] = _pref_type
+
+            matched    = get_top_jobs(resume_text, meta=meta, extra_jobs=live_jobs)
+            live_count = sum(1 for j in matched if j.get("source_type") == "crawled")
+
+            yield f"data: {json.dumps({'type':'jobs','jobs':matched,'live_count':live_count})}\n\n"
             async for chunk in stream_llm_report(resume_text, matched, lang):
                 yield f"data: {json.dumps({'type':'chunk','text':chunk})}\n\n"
+            yield f"data: {json.dumps({'type':'done'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type':'error','message':str(e)})}\n\n"
-        yield f"data: {json.dumps({'type':'done'})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -1294,8 +1316,8 @@ async def draft_resume(
     if not background.strip():
         raise HTTPException(400, "background is required")
 
-    safe_jd = jd_text.strip()[:3000]
-    safe_bg = background.strip()[:1500]
+    safe_jd = _sanitize_input(jd_text.strip()[:3000])
+    safe_bg = _sanitize_input(background.strip()[:1500])
 
     if lang == "zh":
         prompt = f"""你是一位专业的简历撰写师。用户提供了一个职位描述和他的个人背景，请为他量身生成一份结构完整、针对该岗位高度优化的中文简历草稿。
@@ -1425,8 +1447,8 @@ async def analyze_jd(
     if len(resume_text.strip()) < 50:
         raise HTTPException(422, _err("empty_content", lang))
 
-    safe_resume = resume_text[:MAX_CHARS]
-    safe_jd     = jd_text.strip()[:3000]
+    safe_resume = _sanitize_input(resume_text[:MAX_CHARS])
+    safe_jd     = _sanitize_input(jd_text.strip()[:3000])
 
     if lang == "zh":
         prompt = f"""你是一位专业的职业顾问，请对以下简历与职位描述进行深度匹配分析。
@@ -1695,7 +1717,7 @@ async def optimize_resume_for_job(
     # Extract resume text
     raw = await file.read()
     resume_text = await extract_text(raw, file.content_type or "", file.filename or "", lang)
-    safe_resume = resume_text[:MAX_CHARS]
+    safe_resume = _sanitize_input(resume_text[:MAX_CHARS])
 
     jd_text = (job.get("full_jd") or "").strip() or (
         f"职位: {job['title']}\n技能要求: {', '.join(job.get('keywords', []))}"

@@ -206,6 +206,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import DOMPurify from 'dompurify'
 
 defineEmits(['close'])
 
@@ -362,7 +363,7 @@ function md(raw) {
   }
   if (tbuf.length) flushTable()
   if (ul) html += '</ul>'
-  return html
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
 }
 const mdResult = computed(() => md)
 
