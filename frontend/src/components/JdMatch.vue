@@ -108,7 +108,7 @@
 
             <label class="drop-zone" :class="{'has-file': mFile}">
               <input type="file"
-                accept=".pdf,.docx,.doc,.xlsx,.xls,.md,.txt,.jpg,.jpeg,.png"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
                 @change="pickFile" hidden />
               <template v-if="!mFile">
                 <span class="dz-cloud">☁</span>

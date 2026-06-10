@@ -39,7 +39,7 @@
         <p class="sub">{{ t('hero.sub') }}</p>
 
         <label class="upload">
-          <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls,.md,.txt,.jpg,.jpeg,.png" @change="pick" hidden>
+          <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*" @change="pick" hidden>
           <span v-if="!file">📋 {{ t('upload.drag') }}</span>
           <span v-else>📄 {{ file.name }}</span>
         </label>
