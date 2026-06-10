@@ -196,6 +196,11 @@
       <JdMatch @close="switchTo('seeker')" />
     </template>
 
+    <!-- ── BATCH SCREENING MODE ────────────────────────────────── -->
+    <template v-else-if="mode === 'batch'">
+      <BatchMatch @close="switchTo('seeker')" />
+    </template>
+
     <!-- ── RECRUITER MODE ───────────────────────────────────── -->
     <template v-else>
       <h2 class="rec-title">{{ t('recruiter.title') }}</h2>
@@ -285,6 +290,17 @@
           <span class="jdm-entry-arr">→</span>
         </button>
 
+        <!-- Batch screening entry -->
+        <div class="divider" />
+        <button class="jdm-entry batch-entry" :class="{ active: mode === 'batch' }" @click="switchTo('batch')">
+          <span class="jdm-entry-ico">📦</span>
+          <div class="jdm-entry-text">
+            <span class="jdm-entry-title">{{ t('profile.batch') }}</span>
+            <span class="jdm-entry-desc">{{ t('profile.batchDesc') }}</span>
+          </div>
+          <span class="jdm-entry-arr">→</span>
+        </button>
+
         <!-- Preset visibility toggle -->
         <div class="divider" />
         <div class="prow">
@@ -335,6 +351,7 @@ import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import LandingPage from './components/LandingPage.vue'
 import JdMatch from './components/JdMatch.vue'
+import BatchMatch from './components/BatchMatch.vue'
 import { setLocale } from './i18n.js'
 import { CHINA_CITY_GROUPS } from './cities.js'
 
@@ -361,6 +378,8 @@ function launchApp(targetMode = 'seeker') {
   showLanding.value = false
   if (targetMode === 'jdmatch') {
     switchTo('jdmatch')
+  } else if (targetMode === 'batch') {
+    switchTo('batch')
   } else {
     // Default seeker path — restore cached analysis if available
     switchTo('seeker')
@@ -1083,6 +1102,10 @@ body {
 .jdm-entry-desc { font-size: .72rem; color: #64748b; line-height: 1.4; }
 .jdm-entry-arr { font-size: .8rem; color: #64748b; transition: transform .3s var(--ease); }
 .jdm-entry:hover .jdm-entry-arr { transform: translateX(4px); color: #a5b4fc; }
+
+.batch-entry { background: rgba(139,92,246,.08); border-color: rgba(139,92,246,.18); }
+.batch-entry:hover { background: rgba(139,92,246,.16); border-color: rgba(139,92,246,.35); }
+.batch-entry.active { background: rgba(139,92,246,.18); border-color: rgba(139,92,246,.4); }
 
 /* --- Keyframes ----------------------------------------------------- */
 @keyframes fadeUp  { from { opacity:0; transform:translateY(32px); } to { opacity:1; transform:translateY(0); } }
