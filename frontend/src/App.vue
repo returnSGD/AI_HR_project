@@ -81,6 +81,13 @@
       <template v-else>
         <div v-if="phase === 'loading'" class="status">⏳ {{ statusText }}</div>
 
+        <!-- Cache restore notice — shown when results were recovered from session storage -->
+        <div v-if="fromCache" class="cache-notice">
+          💾 已恢复上次分析结果，无需重新上传 &nbsp;·&nbsp;
+          <button class="cache-clear-btn" @click="reset">重新上传</button>
+          以获取最新推荐
+        </div>
+
         <div v-if="jobs.length">
           <div class="slabel">
             {{ t('section.jobs', { n: displayJobs.length }) }}
@@ -334,12 +341,26 @@ import { CHINA_CITY_GROUPS } from './cities.js'
 const API_BASE = 'https://offer-catcher-api.onrender.com'
 const { t, locale } = useI18n()
 
-// ── Landing page state ────────────────────────────────────────────────
-// Show landing once per session; skip if user came back mid-session
-const showLanding = ref(!sessionStorage.getItem('oc_launched'))
+// ── Reload detection: F5 / Ctrl+R forces landing page ────────────────────────
+// Transient states (phase, err, loading) are cleared automatically on reload
+// because they live only in JS memory. Analysis results survive in sessionStorage.
+const _isReload = (() => {
+  try { return performance.getEntriesByType('navigation')[0]?.type === 'reload' }
+  catch (_) { return false }
+})()
+if (_isReload) sessionStorage.removeItem('oc_launched')
+
+// ── Session cache key (analysis results — survives F5, cleared by reset) ─────
+const CACHE_KEY = 'cached_resume_analysis'
+
+// ── Landing page state ────────────────────────────────────────────────────────
+const showLanding = ref(_isReload || !sessionStorage.getItem('oc_launched'))
+
 function launchApp() {
   sessionStorage.setItem('oc_launched', '1')
   showLanding.value = false
+  // Restore cached analysis so user needn't re-upload after F5 / mode switch
+  if (mode.value === 'seeker') tryRestoreCache()
 }
 
 // ── Global state ──────────────────────────────────────────────────────
@@ -399,6 +420,26 @@ const jobs         = ref([])
 const report       = ref('')
 const err          = ref('')
 const statusText   = ref('')
+const fromCache    = ref(false)  // true when current results came from session cache
+
+function tryRestoreCache() {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY)
+    if (!raw) return
+    const { savedJobs, savedReport, savedLiveCount } = JSON.parse(raw)
+    if (!savedJobs?.length) return
+    jobs.value      = savedJobs
+    report.value    = savedReport || ''
+    liveCount.value = savedLiveCount || 0
+    phase.value     = 'done'
+    fromCache.value = true
+  } catch (_) { /* corrupt cache — silently ignore */ }
+}
+
+// Restore cached analysis when switching back to seeker mode with no data loaded
+watch(() => mode.value, (newMode) => {
+  if (newMode === 'seeker' && phase.value === 'idle') tryRestoreCache()
+})
 
 // Lazy-load full JD when a card is expanded
 watch(expandedId, async (id) => {
@@ -493,6 +534,7 @@ function pick(e) {
 
 async function run() {
   if (!file.value) return
+  fromCache.value = false
   err.value = ''; jobs.value = []; report.value = ''
   phase.value = 'loading'; statusText.value = t('status.read')
   try {
@@ -535,6 +577,14 @@ async function run() {
       }
     }
     phase.value = 'done'
+    // Persist results so they survive F5; cleared only when user clicks 重新上传
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+        savedJobs: jobs.value,
+        savedReport: report.value,
+        savedLiveCount: liveCount.value,
+      }))
+    } catch (_) { /* sessionStorage quota exceeded — non-fatal */ }
   } catch (e) {
     err.value = e.message || t('error.api')
     phase.value = 'idle'
@@ -542,6 +592,8 @@ async function run() {
 }
 
 function reset() {
+  sessionStorage.removeItem(CACHE_KEY)
+  fromCache.value = false
   phase.value = 'idle'; file.value = null; jobs.value = []
   report.value = ''; err.value = ''; expandedId.value = null
   liveCount.value = 0
@@ -822,6 +874,11 @@ body {
 .flt-sel { border: 1.5px solid rgba(255,255,255,.1); border-radius: 24px; padding: 6px 14px; font-size: .82rem; background: rgba(255,255,255,.06); color: #e2e8f0; cursor: pointer; appearance: none; -webkit-appearance: none; transition: border-color .35s var(--ease), box-shadow .35s var(--ease); }
 .flt-sel:focus { outline: none; border-color: var(--y); box-shadow: 0 0 0 3px rgba(245,166,35,.14); }
 .flt-sel option { background: #0f0f1e; color: #e2e8f0; }
+
+/* --- Cache notice -------------------------------------------------- */
+.cache-notice { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; font-size: .82rem; color: #a78bfa; background: rgba(167,139,250,.08); border: 1px solid rgba(167,139,250,.2); border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; }
+.cache-clear-btn { background: none; border: 1px solid rgba(167,139,250,.45); border-radius: 20px; color: #a78bfa; font-size: .8rem; font-weight: 600; padding: 3px 12px; cursor: pointer; transition: background .25s, border-color .25s; }
+.cache-clear-btn:hover { background: rgba(167,139,250,.15); border-color: #a78bfa; }
 
 /* --- Buttons ------------------------------------------------------- */
 .center { text-align: center; margin-top: 22px; }
