@@ -191,18 +191,8 @@
       </template>
     </template>
 
-    <!-- ── JD MATCH MODE ─────────────────────────────────────── -->
-    <template v-else-if="mode === 'jdmatch'">
-      <JdMatch @close="switchTo('seeker')" />
-    </template>
-
-    <!-- ── BATCH SCREENING MODE ────────────────────────────────── -->
-    <template v-else-if="mode === 'batch'">
-      <BatchMatch @close="switchTo('seeker')" />
-    </template>
-
     <!-- ── RECRUITER MODE ───────────────────────────────────── -->
-    <template v-else>
+    <template v-else-if="mode === 'recruiter'">
       <h2 class="rec-title">{{ t('recruiter.title') }}</h2>
 
       <div class="form">
@@ -340,6 +330,10 @@
       </div>
     </div>
   </Transition>
+
+  <!-- ── Full-screen overlays — rendered outside .main so position:fixed is viewport-relative ── -->
+  <JdMatch    v-if="mode === 'jdmatch'" @close="switchTo('seeker')" />
+  <BatchMatch v-if="mode === 'batch'"   @close="switchTo('seeker')" />
 
   </div><!-- /app-wrap -->
   </Transition>

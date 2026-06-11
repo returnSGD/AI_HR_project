@@ -175,6 +175,32 @@
 
       <!-- ═══════════ STEP 3: Results ═══════════ -->
       <template v-if="step === 3">
+
+        <!-- Loading state -->
+        <div v-if="loading" class="phase-loading ai-in" style="--d:0s">
+          <div class="phase-ring-wrap">
+            <div class="phase-ring"></div>
+          </div>
+          <div class="phase-text">{{ statusText }}</div>
+          <p class="phase-hint">{{ locale === 'zh' ? 'AI 正在逐一深度评估简历，请稍候…' : 'AI is evaluating each resume. Please wait…' }}</p>
+        </div>
+
+        <!-- Results area: shown only after loading -->
+        <template v-if="!loading">
+
+        <!-- Report header -->
+        <div v-if="candidates.length" class="report-hdr ai-in" style="--d:0s">
+          <div class="rpt-tag"><span class="rpt-dot"></span>{{ locale === 'zh' ? 'AI 批量筛选完成' : 'AI Screening Complete' }}</div>
+          <h2 class="rpt-title">{{ locale === 'zh' ? '候选人排名报告' : 'Candidate Ranking Report' }}</h2>
+        </div>
+
+        <!-- Empty state -->
+        <div v-if="!candidates.length && !summary" class="empty-state ai-in" style="--d:0s">
+          <div class="es-icon">🔍</div>
+          <div class="es-title">{{ locale === 'zh' ? '未找到候选人数据' : 'No candidate data' }}</div>
+          <div class="es-desc">{{ locale === 'zh' ? '请检查简历文件格式，或降低筛选条件后重试' : 'Check file formats or relax the filter criteria' }}</div>
+        </div>
+
         <!-- Summary card -->
         <div v-if="summary" class="summary-card ai-in" style="--d:0s">
           <div class="sum-grid">
@@ -286,16 +312,20 @@
         </template>
 
         <!-- Actions -->
-        <div class="center-btn" style="margin-top:32px">
+        <div v-if="candidates.length" class="center-btn" style="margin-top:32px">
           <button class="cta-btn" @click="copyReport">
             {{ locale === 'zh' ? '📋 复制排名报告' : '📋 Copy Ranking Report' }}
             <span class="btn-shine"></span>
           </button>
+        </div>
+        <div class="center-btn" style="margin-top:12px">
           <button class="ghost-btn" @click="reset">
             {{ locale === 'zh' ? '↺ 开始新的筛选' : '↺ Start New Screening' }}
           </button>
         </div>
-      </template>
+
+        </template><!-- /v-if="!loading" -->
+      </template><!-- /step 3 -->
 
     </div>
   </div>
@@ -521,7 +551,7 @@ function handleClose() {
 <style scoped>
 /* ── Root ───────────────────────────────────────────────────── */
 .bm {
-  position: fixed; inset: 0; z-index: 50;
+  position: fixed; inset: 0; z-index: 150;
   background: #050510;
   color: #e2e8f0;
   font-family: -apple-system, 'SF Pro Text', 'Inter', sans-serif;
@@ -531,10 +561,10 @@ function handleClose() {
 }
 
 .bm-nav {
-  position: sticky; top: 0; z-index: 100;
+  position: sticky; top: 0; z-index: 200;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 28px; height: 56px;
-  background: rgba(5,5,16,.75);
+  background: rgba(5,5,16,.92);
   backdrop-filter: saturate(180%) blur(24px);
   -webkit-backdrop-filter: saturate(180%) blur(24px);
   border-bottom: 1px solid rgba(255,255,255,.06);
@@ -554,8 +584,13 @@ function handleClose() {
 .brand-word { font-weight: 700; font-size: .9rem; color: #f1f5f9; letter-spacing: -.01em; }
 
 .bm-body {
-  max-width: 820px; margin: 0 auto;
-  padding: 48px 24px 100px;
+  max-width: 760px; margin: 0 auto;
+  padding: 40px 24px 100px;
+}
+@media (max-width: 800px) {
+  .bm-body { padding: 28px 16px 80px; }
+  .bm-nav { padding: 0 16px; }
+  .brand-word { display: none; }
 }
 
 /* ── Hero ── */
@@ -644,8 +679,8 @@ function handleClose() {
 
 /* ── Form ── */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
-.field { display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field label { font-size: .74rem; font-weight: 600; color: #64748b; letter-spacing: .03em; text-transform: uppercase; }
 .req { color: #f87171; }
 .inp {
@@ -725,6 +760,49 @@ function handleClose() {
   border-radius: 50%; animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Phase loading (Step 3) ── */
+.phase-loading {
+  text-align: center; padding: 80px 24px 60px;
+}
+.phase-ring-wrap {
+  width: 64px; height: 64px; margin: 0 auto 24px;
+}
+.phase-ring {
+  width: 64px; height: 64px; border-radius: 50%;
+  border: 3px solid rgba(99,102,241,.2); border-top-color: #818cf8;
+  animation: spin 1s linear infinite;
+}
+.phase-text {
+  font-size: .92rem; font-weight: 600; color: #e2e8f0; margin-bottom: 10px;
+  min-height: 1.4em;
+}
+.phase-hint { font-size: .78rem; color: #475569; line-height: 1.6; }
+
+/* ── Report header (Step 3) ── */
+.report-hdr { text-align: center; margin-bottom: 28px; }
+.rpt-tag {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: #34d399; background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.25);
+  padding: 4px 14px; border-radius: 20px; margin-bottom: 12px;
+}
+.rpt-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #34d399;
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+.rpt-title {
+  font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 800;
+  letter-spacing: -.03em; color: #f1f5f9; margin: 0;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  text-align: center; padding: 60px 24px;
+}
+.es-icon { font-size: 2.4rem; margin-bottom: 16px; }
+.es-title { font-size: 1rem; font-weight: 700; color: #f1f5f9; margin-bottom: 8px; }
+.es-desc { font-size: .83rem; color: #475569; line-height: 1.6; max-width: 360px; margin: 0 auto; }
 
 /* ── Summary card ── */
 .summary-card {
