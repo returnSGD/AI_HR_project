@@ -600,8 +600,13 @@ function handleClose() {
 
 /* ── Panel ── */
 .panel {
+  width: auto; height: auto; display: block;
   background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
+  border-left: 1px solid rgba(255,255,255,.07);
   border-radius: 20px; padding: 26px 24px; margin-bottom: 20px;
+  box-shadow: none; gap: normal;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  overflow-y: visible;
 }
 .panel-hd { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
 .panel-ico {
