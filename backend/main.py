@@ -993,7 +993,23 @@ async def extract_text(data: bytes, content_type: str, filename: str, lang: str)
         if len(text.strip()) >= 50:
             return text
 
-        # Text layer too thin — try OCR page-by-page (run in executor to not block).
+        # Text layer too thin — try vision LLM first (Qwen-VL), then Tesseract fallback.
+        if VISION_MODEL:
+            try:
+                import io as _io
+                doc_ocr = fitz.open(stream=data, filetype="pdf")
+                page_texts: list[str] = []
+                for page in doc_ocr:
+                    pix = page.get_pixmap(dpi=200)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    buf = _io.BytesIO()
+                    img.save(buf, format="PNG")
+                    page_texts.append(await _ocr_via_vision_llm(buf.getvalue(), "image/png", lang))
+                return "\n".join(t for t in page_texts if t.strip())
+            except Exception as exc:
+                raise HTTPException(422, _err("parse_failed", lang, detail=str(exc)))
+
+        # Tesseract fallback when no vision model is configured
         try:
             import asyncio
             doc2 = fitz.open(stream=data, filetype="pdf")
@@ -2231,7 +2247,9 @@ async def batch_match_resumes(
                         "resume_text": resume_text,
                         "content_hash": content_hash,
                     })
-                except Exception:
+                except Exception as _exc:
+                    _detail = _exc.detail if isinstance(_exc, HTTPException) else str(_exc)
+                    print(f"[batch-match] {getattr(f, 'filename', '?')!r}: {_detail}")
                     invalid_count += 1
 
                 if (idx + 1) % 5 == 0 or idx == len(files) - 1:

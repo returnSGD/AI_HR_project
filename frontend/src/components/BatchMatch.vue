@@ -527,6 +527,7 @@ function handleClose() {
   font-family: -apple-system, 'SF Pro Text', 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .bm-nav {
