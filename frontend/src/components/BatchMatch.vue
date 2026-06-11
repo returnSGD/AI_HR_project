@@ -555,7 +555,10 @@ function handleClose() {
 <style scoped>
 /* ── Root: fixed fullscreen shell, no overflow here ─────────── */
 .bm {
-  position: fixed; inset: 0;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: 150;
   background: #050510;
   color: #e2e8f0;
@@ -569,10 +572,16 @@ function handleClose() {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* ── Nav: sticky inside scroll container, naturally full-width ─ */
 .bm-nav {
+  width: 100%;
+  flex-shrink: 0;
+  box-sizing: border-box;
   position: sticky; top: 0; z-index: 200;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 28px; height: 56px;
@@ -597,8 +606,8 @@ function handleClose() {
 
 /* ── Body: plain block + margin auto = bulletproof centering ─── */
 .bm-body {
-  width: 600px;
-  max-width: calc(100% - 32px);
+  width: 100%;
+  max-width: 600px;
   margin-left: auto;
   margin-right: auto;
   padding: 40px 16px 100px;
