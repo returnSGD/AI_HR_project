@@ -553,8 +553,7 @@ function handleClose() {
 <style scoped>
 /* ── Root ───────────────────────────────────────────────────── */
 .bm {
-  position: fixed; top: 0; left: 0;
-  width: 100vw; min-height: 100vh;
+  position: fixed; inset: 0;
   z-index: 150;
   background: #050510;
   color: #e2e8f0;
@@ -562,15 +561,10 @@ function handleClose() {
   -webkit-font-smoothing: antialiased;
   overflow-y: auto;
   overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
 .bm-nav {
   position: sticky; top: 0; z-index: 200;
-  width: 100%;
-  align-self: stretch;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 28px; height: 56px;
   background: rgba(5,5,16,.92);
@@ -594,10 +588,11 @@ function handleClose() {
 
 .bm-body {
   width: 600px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(100% - 32px);
+  margin-left: auto;
+  margin-right: auto;
   padding: 40px 16px 100px;
   box-sizing: border-box;
-  flex-shrink: 0;
 }
 @media (max-width: 680px) {
   .bm-nav { padding: 0 16px; }
