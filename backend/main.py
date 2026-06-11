@@ -921,7 +921,7 @@ def _ocr_image(image: "Image.Image") -> str:
 
 
 async def _ocr_via_vision_llm(data: bytes, img_mime: str, lang: str) -> str:
-    """Send image bytes to vision LLM and return extracted text."""
+    """Send image bytes to vision LLM (OpenAI-compatible API) and return extracted text."""
     import base64
     b64 = base64.b64encode(data).decode()
     api_key  = (VISION_API_KEY  or LLM_API_KEY).strip()
@@ -939,23 +939,25 @@ async def _ocr_via_vision_llm(data: bytes, img_mime: str, lang: str) -> str:
     )
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(
-            f"{base_url}/v1/messages",
-            headers={"x-api-key": api_key, "Content-Type": "application/json"},
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
                 "model": model,
-                "system": system_prompt,
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": img_mime, "data": b64}},
-                        {"type": "text", "text": user_prompt},
-                    ],
-                }],
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:{img_mime};base64,{b64}"}},
+                            {"type": "text", "text": user_prompt},
+                        ],
+                    },
+                ],
                 "max_tokens": 3000,
             },
         )
     resp.raise_for_status()
-    return resp.json()["content"][0]["text"]
+    return resp.json()["choices"][0]["message"]["content"]
 
 
 async def extract_text(data: bytes, content_type: str, filename: str, lang: str) -> str:
@@ -2210,21 +2212,32 @@ async def batch_match_resumes(
     must_list = [s.strip() for s in must_skills.split(",") if s.strip()]
     plus_list = [s.strip() for s in plus_skills.split(",") if s.strip()]
 
+    # Read all file bytes eagerly NOW — UploadFile handles are closed once
+    # StreamingResponse starts yielding, so they must be buffered before the generator.
+    file_records: list[dict] = []
+    for f in files:
+        file_records.append({
+            "raw": await f.read(),
+            "content_type": f.content_type or "",
+            "filename": f.filename or "",
+        })
+
     async def event_stream():
         try:
             # ═══════════════════════════════════════════════════════════
             # Phase 1: Parse all resumes
             # ═══════════════════════════════════════════════════════════
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'parsing', 'current': 0, 'total': len(files), 'text': ('正在解析简历 (0/%d)…' % len(files)) if lang == 'zh' else ('Parsing resumes (0/%d)…' % len(files))})}\n\n"
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'parsing', 'current': 0, 'total': len(file_records), 'text': ('正在解析简历 (0/%d)…' % len(file_records)) if lang == 'zh' else ('Parsing resumes (0/%d)…' % len(file_records))})}\n\n"
 
             parsed: list[dict] = []
             seen_hashes: set[str] = set()
             invalid_count = 0
             dup_count = 0
 
-            for idx, f in enumerate(files):
+            for idx, fd in enumerate(file_records):
+                fname = fd["filename"] or f"resume_{idx + 1}"
                 try:
-                    raw = await f.read()
+                    raw = fd["raw"]
                     if len(raw) > BATCH_MAX_FILE_SIZE:
                         invalid_count += 1
                         continue
@@ -2235,7 +2248,7 @@ async def batch_match_resumes(
                         continue
                     seen_hashes.add(content_hash)
 
-                    resume_text = await extract_text(raw, f.content_type or "", f.filename or "", lang)
+                    resume_text = await extract_text(raw, fd["content_type"], fd["filename"], lang)
 
                     if len(resume_text.strip()) < 50:
                         invalid_count += 1
@@ -2243,21 +2256,23 @@ async def batch_match_resumes(
 
                     parsed.append({
                         "resume_id": f"batch_{content_hash[:12]}",
-                        "filename": f.filename or f"resume_{idx + 1}",
+                        "filename": fname,
                         "resume_text": resume_text,
                         "content_hash": content_hash,
                     })
                 except Exception as _exc:
                     _detail = _exc.detail if isinstance(_exc, HTTPException) else str(_exc)
-                    print(f"[batch-match] {getattr(f, 'filename', '?')!r}: {_detail}")
+                    print(f"[batch-match] {fname!r}: {_detail}")
+                    yield f"data: {json.dumps({'type': 'warning', 'message': f'跳过 {fname}: {_detail}' if lang == 'zh' else f'Skipped {fname}: {_detail}'})}\n\n"
                     invalid_count += 1
 
-                if (idx + 1) % 5 == 0 or idx == len(files) - 1:
+                if (idx + 1) % 5 == 0 or idx == len(file_records) - 1:
                     extra = (f" 去重 {dup_count} 份, 无效 {invalid_count} 份" if dup_count or invalid_count else "") if lang == "zh" else (f" {dup_count} dupes, {invalid_count} invalid" if dup_count or invalid_count else "")
-                    yield f"data: {json.dumps({'type': 'progress', 'stage': 'parsing', 'current': idx + 1, 'total': len(files), 'text': (f'正在解析简历 ({idx + 1}/{len(files)})… 有效 {len(parsed)} 份{extra}' if lang == 'zh' else f'Parsing resumes ({idx + 1}/{len(files)})… {len(parsed)} valid{extra}')})}\n\n"
+                    yield f"data: {json.dumps({'type': 'progress', 'stage': 'parsing', 'current': idx + 1, 'total': len(file_records), 'text': (f'正在解析简历 ({idx + 1}/{len(file_records)})… 有效 {len(parsed)} 份{extra}' if lang == 'zh' else f'Parsing resumes ({idx + 1}/{len(file_records)})… {len(parsed)} valid{extra}')})}\n\n"
 
             if not parsed:
-                msg = "所有简历均无法解析或格式无效，请检查文件格式" if lang == "zh" else "No valid resumes could be parsed. Check file formats."
+                hint = "（支持 PDF、Word、图片格式）" if lang == "zh" else " (PDF, Word, and image files supported)"
+                msg = f"所有简历均无法解析或格式无效，请检查文件格式{hint}" if lang == "zh" else f"No valid resumes could be parsed. Check file formats{hint}."
                 yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
                 return
 
@@ -2314,7 +2329,7 @@ async def batch_match_resumes(
                     "missing_must_skills": "缺少必备技能" if lang == "zh" else "Missing required skills",
                     "education_mismatch": "学历不满足最低要求" if lang == "zh" else "Below minimum education tier",
                 }
-                yield f"data: {json.dumps({'type':'result','candidates':[{'rank':999,'tier':'rejected','reject_reason':reason_i18n.get(r['reject_reason'],r['reject_reason']),'raw_filename':r['filename'],'resume_id':r['resume_id']} for r in rejected],'summary':{'total_uploaded':len(files),'passed_screening':0,'headcount':headcount,'avg_score':0,'rejected_all':True,'reject_reasons':{reason_i18n.get(k,k):v for k,v in reject_reasons.items()}}})}\n\n"
+                yield f"data: {json.dumps({'type':'result','candidates':[{'rank':999,'tier':'rejected','reject_reason':reason_i18n.get(r['reject_reason'],r['reject_reason']),'raw_filename':r['filename'],'resume_id':r['resume_id']} for r in rejected],'summary':{'total_uploaded':len(file_records),'passed_screening':0,'headcount':headcount,'avg_score':0,'rejected_all':True,'reject_reasons':{reason_i18n.get(k,k):v for k,v in reject_reasons.items()}}})}\n\n"
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
                 return
 
@@ -2478,7 +2493,7 @@ async def batch_match_resumes(
                 })
 
             summary = {
-                "total_uploaded": len(files),
+                "total_uploaded": len(file_records),
                 "passed_screening": len(screened),
                 "headcount": headcount,
                 "avg_score": round(avg, 1),

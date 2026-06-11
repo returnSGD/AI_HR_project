@@ -210,7 +210,7 @@ import DOMPurify from 'dompurify'
 
 defineEmits(['close'])
 
-const API_BASE = 'https://offer-catcher-api.onrender.com'
+const API_BASE = import.meta.env.DEV ? '' : 'https://offer-catcher-api.onrender.com'
 const { locale } = useI18n()
 
 // ── refs ──────────────────────────────────────────────────────

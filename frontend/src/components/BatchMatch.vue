@@ -338,7 +338,7 @@ import { useI18n } from 'vue-i18n'
 const emit = defineEmits(['close'])
 const { locale } = useI18n()
 
-const API_BASE = 'https://offer-catcher-api.onrender.com'
+const API_BASE = import.meta.env.DEV ? '' : 'https://offer-catcher-api.onrender.com'
 
 // ── Steps ────────────────────────────────────────────────────
 const step = ref(1)
@@ -433,6 +433,8 @@ async function run() {
         const obj = JSON.parse(line.slice(6))
         if (obj.type === 'progress') {
           statusText.value = obj.text
+        } else if (obj.type === 'warning') {
+          console.warn('[batch-match]', obj.message)
         } else if (obj.type === 'result') {
           candidates.value = obj.candidates || []
           summary.value = obj.summary || null
