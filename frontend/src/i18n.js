@@ -43,6 +43,8 @@ const messages = {
       closedToast: '岗位已关闭 ✓', reopenedToast: '岗位已重新开放 ✓',
       jdmatch: 'JD 精准匹配',
       jdmatchDesc: '粘贴任意 JD，分析与你简历的契合度',
+      batch: '📦 批量筛选 (HR)',
+      batchDesc: '批量上传简历，AI 自动评分排名',
     },
     jdm: {
       title: 'JD 精准匹配',
@@ -100,6 +102,8 @@ const messages = {
       closedToast: 'Job closed ✓', reopenedToast: 'Job reopened ✓',
       jdmatch: 'JD Fit Analyzer',
       jdmatchDesc: 'Paste any JD to analyze how well your resume fits',
+      batch: '📦 Batch Screening (HR)',
+      batchDesc: 'Upload many resumes, AI ranks them',
     },
     jdm: {
       title: 'JD Fit Analyzer',

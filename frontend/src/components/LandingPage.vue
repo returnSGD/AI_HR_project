@@ -634,7 +634,7 @@ section { position:relative; z-index:10; }
 .ai-sparkle { font-size:.9rem; color:#818cf8; flex-shrink:0; }
 .ai-inp {
   flex:1; background:none; border:none; outline:none; font-size:.88rem;
-  color:#e2e8f0; placeholder-color:#475569;
+  color:#e2e8f0;
   font-family:inherit;
 }
 .ai-inp::placeholder { color:#475569; }
