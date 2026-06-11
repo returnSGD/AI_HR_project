@@ -1,5 +1,6 @@
 <template>
   <div class="bm" ref="root">
+  <div class="bm-scroll">
 
     <!-- Nav -->
     <nav class="bm-nav">
@@ -328,6 +329,7 @@
       </template><!-- /step 3 -->
 
     </div>
+  </div><!-- /bm-scroll -->
   </div>
 </template>
 
@@ -551,17 +553,25 @@ function handleClose() {
 </script>
 
 <style scoped>
-/* ── Root ───────────────────────────────────────────────────── */
+/* 1. 恢复原状，确保全屏覆盖 */
 .bm {
-  position: fixed; inset: 0; z-index: 150;
+  position: fixed; inset: 0;
+  z-index: 150;
   background: #050510;
   color: #e2e8f0;
   font-family: -apple-system, 'SF Pro Text', 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* 2. 彻底移除上一次错误的 display: flex，恢复原生滚动流 */
+.bm-scroll {
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
+/* 3. 恢复原生导航栏 */
 .bm-nav {
   position: sticky; top: 0; z-index: 200;
   display: flex; align-items: center; justify-content: space-between;
@@ -585,9 +595,16 @@ function handleClose() {
 .brand-ico { font-size: 1rem; }
 .brand-word { font-weight: 700; font-size: .9rem; color: #f1f5f9; letter-spacing: -.01em; }
 
+/* 4. 【核心修复】使用相对定位暴力居中主体，无视外部框架干扰 */
 .bm-body {
-  max-width: 760px; margin: 0 auto;
-  padding: 40px 24px 100px;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%); /* 强行拉回中心绝对中轴线 */
+  width: 600px;
+  max-width: calc(100% - 32px);
+  padding: 40px 16px 100px;
+  box-sizing: border-box;
+  margin: 0; /* 清除原先失效的 margin: auto */
 }
 @media (max-width: 800px) {
   .bm-body { padding: 28px 16px 80px; }
