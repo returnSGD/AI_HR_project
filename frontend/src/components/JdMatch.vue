@@ -462,13 +462,18 @@ onUnmounted(() => {
 <style scoped>
 /* ── Root: full-page dark overlay ────────────────────────────── */
 .jdm {
-  position: fixed; inset: 0; z-index: 50;
+  position: fixed; top: 0; left: 0;
+  width: 100vw; min-height: 100vh;
+  z-index: 50;
   background: #050510;
   color: #e2e8f0;
   font-family: -apple-system, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-y: auto;
   overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* ── Fixed BG layer ── */
@@ -494,6 +499,8 @@ onUnmounted(() => {
 /* ── Nav ── */
 .jdm-nav {
   position: sticky; top: 0; z-index: 100;
+  width: 100%;
+  align-self: stretch;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 28px; height: 56px;
   background: rgba(5,5,16,.75);
@@ -518,8 +525,11 @@ onUnmounted(() => {
 /* ── Scrollable content wrapper ── */
 .jdm-body {
   position: relative; z-index: 10;
-  max-width: 1140px; margin: 0 auto;
+  width: 100%;
+  max-width: 1140px;
   padding: 64px 24px 100px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 /* ── Hero ── */
