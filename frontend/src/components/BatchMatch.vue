@@ -1,5 +1,6 @@
 <template>
   <div class="bm" ref="root">
+  <div class="bm-scroll">
 
     <!-- Nav -->
     <nav class="bm-nav">
@@ -328,7 +329,8 @@
       </template><!-- /step 3 -->
 
     </div><!-- /bm-body -->
-  </div>
+  </div><!-- /bm-scroll -->
+  </div><!-- /bm -->
 </template>
 
 <script setup>
@@ -551,7 +553,7 @@ function handleClose() {
 </script>
 
 <style scoped>
-/* ── Root ───────────────────────────────────────────────────── */
+/* ── Root: fixed fullscreen shell, no overflow here ─────────── */
 .bm {
   position: fixed; inset: 0;
   z-index: 150;
@@ -559,10 +561,17 @@ function handleClose() {
   color: #e2e8f0;
   font-family: -apple-system, 'SF Pro Text', 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scroll container: takes full area, owns all scrolling ───── */
+.bm-scroll {
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
+/* ── Nav: sticky inside scroll container, naturally full-width ─ */
 .bm-nav {
   position: sticky; top: 0; z-index: 200;
   display: flex; align-items: center; justify-content: space-between;
@@ -586,6 +595,7 @@ function handleClose() {
 .brand-ico { font-size: 1rem; }
 .brand-word { font-weight: 700; font-size: .9rem; color: #f1f5f9; letter-spacing: -.01em; }
 
+/* ── Body: plain block + margin auto = bulletproof centering ─── */
 .bm-body {
   width: 600px;
   max-width: calc(100% - 32px);
