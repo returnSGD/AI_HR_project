@@ -46,13 +46,59 @@
           : 'Upload resume · match top roles in 15s · get a personalized AI report' }}
       </p>
 
-      <div class="hero-btns ai-in" style="--d:.42s">
-        <button class="cta-btn" @click="openModal">
-          <span>{{ locale === 'zh' ? '✨ 立即分析简历' : '✨ Analyze My Resume' }}</span>
-          <span class="cta-shine"></span>
-        </button>
-        <span class="cta-note">{{ locale === 'zh' ? '免费 · 无需注册' : 'Free · No sign-up' }}</span>
+      <div class="id-selector ai-in" :class="{ 'id-open': openId }" style="--d:.42s">
+        <div class="id-wrap" :class="{ open: openId === 'recruiter' }"
+          @mouseenter="clearTimer(); openId = 'recruiter'"
+          @mouseleave="startTimer">
+          <button class="id-btn">
+            <span class="id-ico">💼</span>
+            <span class="id-label">{{ locale === 'zh' ? '我是招聘者' : 'I am a Recruiter' }}</span>
+            <span class="id-arrow">▾</span>
+          </button>
+          <div class="id-menu">
+            <button class="id-sub" @click="chooseMode('batch')">
+              <span class="is-ico">📦</span>
+              <span class="is-text">
+                <strong>{{ locale === 'zh' ? '批量简历筛选排序' : 'Batch Resume Screening' }}</strong>
+                <small>{{ locale === 'zh' ? '上传多份简历，AI 智能排名' : 'Upload multiple resumes, AI ranks them' }}</small>
+              </span>
+              <span class="is-arr">→</span>
+            </button>
+          </div>
+        </div>
+
+        <span class="id-divider">{{ locale === 'zh' ? '或' : 'or' }}</span>
+
+        <div class="id-wrap" :class="{ open: openId === 'seeker' }"
+          @mouseenter="clearTimer(); openId = 'seeker'"
+          @mouseleave="startTimer">
+          <button class="id-btn">
+            <span class="id-ico">🎯</span>
+            <span class="id-label">{{ locale === 'zh' ? '我是应聘者' : 'I am a Job Seeker' }}</span>
+            <span class="id-arrow">▾</span>
+          </button>
+          <div class="id-menu">
+            <button class="id-sub" @click="chooseMode('jdmatch')">
+              <span class="is-ico">📋</span>
+              <span class="is-text">
+                <strong>{{ locale === 'zh' ? '岗位JD精准匹配' : 'JD Precision Match' }}</strong>
+                <small>{{ locale === 'zh' ? '粘贴意向JD，精准评估匹配度' : 'Paste a JD, evaluate your fit' }}</small>
+              </span>
+              <span class="is-arr">→</span>
+            </button>
+            <button class="id-sub" @click="chooseMode('seeker')">
+              <span class="is-ico">🤖</span>
+              <span class="is-text">
+                <strong>{{ locale === 'zh' ? 'AI智能推荐岗位' : 'AI Smart Job Recommendations' }}</strong>
+                <small>{{ locale === 'zh' ? '上传简历，AI 自动匹配最佳岗位' : 'Upload resume, AI finds best matches' }}</small>
+              </span>
+              <span class="is-arr">→</span>
+            </button>
+          </div>
+        </div>
       </div>
+
+      <span class="cta-note ai-in" style="--d:.50s">{{ locale === 'zh' ? '免费 · 无需注册' : 'Free · No sign-up' }}</span>
 
       <!-- 数据统计 -->
       <div class="stats ai-in" style="--d:.56s">
@@ -189,6 +235,12 @@ import { useI18n } from 'vue-i18n'
 
 const emit = defineEmits(['launch'])
 const { locale } = useI18n()
+
+// ── Identity selector ─────────────────────────────────────────
+const openId = ref(null)
+let closeTimer = null
+function clearTimer() { clearTimeout(closeTimer); closeTimer = null }
+function startTimer() { closeTimer = setTimeout(() => { openId.value = null }, 180) }
 
 // ── Intent modal ──────────────────────────────────────────────
 const showModal = ref(false)
@@ -509,7 +561,108 @@ onUnmounted(() => {
 }
 
 .hero-btns { display:flex; flex-direction:column; align-items:center; gap:14px; }
-.cta-note  { font-size:.72rem; color:#64748b; }
+.cta-note  { font-size:.72rem; color:#64748b; margin-top:14px; display:block; text-align:center; }
+
+/* ─── Identity Selector ─────────────────────────────────────── */
+.id-selector {
+  display: flex; align-items: flex-start; justify-content: center;
+  gap: 16px; flex-wrap: wrap;
+  padding-bottom: 0;
+  transition: padding-bottom .35s cubic-bezier(0.22,1,0.36,1);
+}
+.id-selector.id-open { padding-bottom: 150px; }
+.id-wrap {
+  position: relative;
+}
+.id-btn {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 18px;
+  padding: 14px 22px;
+  font-size: .92rem; font-weight: 700; color: #e2e8f0;
+  cursor: pointer; font-family: inherit;
+  transition: all .4s cubic-bezier(0.22,1,0.36,1);
+  white-space: nowrap;
+}
+.id-btn:hover {
+  background: rgba(99,102,241,.14);
+  border-color: rgba(99,102,241,.35);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(99,102,241,.2);
+}
+.id-ico { font-size: 1.25rem; }
+.id-label { letter-spacing: -.01em; }
+.id-arrow {
+  font-size: .65rem; color: #64748b;
+  transition: transform .35s cubic-bezier(0.22,1,0.36,1);
+}
+.id-wrap.open .id-arrow { transform: rotate(180deg); }
+.id-wrap.open .id-btn {
+  background: rgba(99,102,241,.14);
+  border-color: rgba(99,102,241,.35);
+  border-radius: 18px 18px 0 0;
+}
+.id-wrap.open { z-index: 200; }
+
+.id-menu {
+  position: absolute; top: 100%; left: 0; z-index: 100;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px;
+  background: rgba(10,10,30,.96);
+  border: 1px solid rgba(99,102,241,.3);
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+  opacity: 0; visibility: hidden;
+  transform: translateY(-8px);
+  transition: all .3s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+.id-wrap.open .id-menu {
+  opacity: 1; visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.id-sub {
+  display: flex; align-items: center; gap: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer; font-family: inherit; text-align: left;
+  transition: all .3s cubic-bezier(0.22,1,0.36,1);
+  white-space: normal; min-width: 240px;
+}
+.id-sub:hover {
+  background: rgba(99,102,241,.12);
+  border-color: rgba(99,102,241,.25);
+  transform: translateX(2px);
+}
+.is-ico { font-size: 1.15rem; flex-shrink: 0; width: 28px; text-align: center; }
+.is-text { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.is-text strong { font-size: .82rem; font-weight: 600; color: #f1f5f9; }
+.is-text small  { font-size: .68rem; color: #64748b; }
+.is-arr {
+  color: #475569; font-size: .75rem; flex-shrink: 0;
+  transition: transform .25s, color .25s;
+}
+.id-sub:hover .is-arr { color: #818cf8; transform: translateX(3px); }
+
+.id-divider {
+  font-size: .78rem; color: #334155; font-weight: 600;
+  padding: 14px 4px; display: flex; align-items: center;
+}
+
+@media (max-width: 640px) {
+  .id-selector { flex-direction: column; align-items: center; gap: 10px; }
+  .id-divider { padding: 2px 0; }
+  .id-menu { left: 50%; transform: translate(-50%, -8px); min-width: 260px; }
+  .id-wrap.open .id-menu { transform: translate(-50%, 0); }
+}
 
 /* CTA Button */
 .cta-btn {
@@ -537,6 +690,7 @@ onUnmounted(() => {
 
 /* Stats */
 .stats {
+  position: relative; z-index: 0;
   display:flex; align-items:center; gap:28px;
   margin-top: 52px;
   padding: 20px 32px;
