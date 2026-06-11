@@ -462,8 +462,7 @@ onUnmounted(() => {
 <style scoped>
 /* ── Root: full-page dark overlay ────────────────────────────── */
 .jdm {
-  position: fixed; inset: 0;
-  z-index: 50;
+  position: fixed; inset: 0; z-index: 50;
   background: #050510;
   color: #e2e8f0;
   font-family: -apple-system, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
@@ -519,12 +518,8 @@ onUnmounted(() => {
 /* ── Scrollable content wrapper ── */
 .jdm-body {
   position: relative; z-index: 10;
-  width: 1140px;
-  max-width: calc(100% - 48px);
-  margin-left: auto;
-  margin-right: auto;
-  padding: 64px 0 100px;
-  box-sizing: border-box;
+  max-width: 1140px; margin: 0 auto;
+  padding: 64px 24px 100px;
 }
 
 /* ── Hero ── */

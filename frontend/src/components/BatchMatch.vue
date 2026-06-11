@@ -1,6 +1,5 @@
 <template>
   <div class="bm" ref="root">
-  <div class="bm-scroll">
 
     <!-- Nav -->
     <nav class="bm-nav">
@@ -328,9 +327,8 @@
         </template><!-- /v-if="!loading" -->
       </template><!-- /step 3 -->
 
-    </div><!-- /bm-body -->
-  </div><!-- /bm-scroll -->
-  </div><!-- /bm -->
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -553,35 +551,18 @@ function handleClose() {
 </script>
 
 <style scoped>
-/* ── Root: fixed fullscreen shell, no overflow here ─────────── */
+/* ── Root ───────────────────────────────────────────────────── */
 .bm {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 150;
+  position: fixed; inset: 0; z-index: 150;
   background: #050510;
   color: #e2e8f0;
   font-family: -apple-system, 'SF Pro Text', 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
-}
-
-/* ── Scroll container: takes full area, owns all scrolling ───── */
-.bm-scroll {
-  width: 100%;
-  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
-/* ── Nav: sticky inside scroll container, naturally full-width ─ */
 .bm-nav {
-  width: 100%;
-  flex-shrink: 0;
-  box-sizing: border-box;
   position: sticky; top: 0; z-index: 200;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 28px; height: 56px;
@@ -604,16 +585,12 @@ function handleClose() {
 .brand-ico { font-size: 1rem; }
 .brand-word { font-weight: 700; font-size: .9rem; color: #f1f5f9; letter-spacing: -.01em; }
 
-/* ── Body: plain block + margin auto = bulletproof centering ─── */
 .bm-body {
-  width: 100%;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-  padding: 40px 16px 100px;
-  box-sizing: border-box;
+  max-width: 760px; margin: 0 auto;
+  padding: 40px 24px 100px;
 }
-@media (max-width: 680px) {
+@media (max-width: 800px) {
+  .bm-body { padding: 28px 16px 80px; }
   .bm-nav { padding: 0 16px; }
   .brand-word { display: none; }
 }
